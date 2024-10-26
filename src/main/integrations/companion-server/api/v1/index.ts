@@ -63,7 +63,9 @@ const transformPlayerState = (state: PlayerState) => {
           likeStatus: state.videoDetails.likeStatus,
           thumbnails: state.videoDetails.thumbnails,
           durationSeconds: state.videoDetails.durationSeconds,
-          id: state.videoDetails.id
+          id: state.videoDetails.id,
+          isLive: state.videoDetails.isLive,
+          videoType: state.videoDetails.videoType
         }
       : null,
     // API Users:
