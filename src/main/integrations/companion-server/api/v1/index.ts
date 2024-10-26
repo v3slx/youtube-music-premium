@@ -94,7 +94,7 @@ type Playlist = {
 
 const authorizationWindows: BrowserWindow[] = [];
 
-const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> = async (fastify, options, next) => {
+const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> = async (fastify, options) => {
   const sendCommand = (commandRequest: APIV1CommandRequestBodyType) => {
     const ytmView = options.getYtmView();
     if (ytmView) {
@@ -559,8 +559,6 @@ const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> =
       ipcMain.off("ytmView:deletePlaylistObserved", deletePlaylistObservedListener);
     });
   });
-
-  next();
 };
 
 export default CompanionServerAPIv1;
