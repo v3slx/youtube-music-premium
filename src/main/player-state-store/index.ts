@@ -381,11 +381,12 @@ class PlayerStateStore {
     muted: boolean | null,
     adPlaying: boolean | null
   ) {
-    const queueItems = queueState ? queueState.items.map(mapYTMQueueItems) : [];
+    const queueItems = queueState ? queueState.items?.map(mapYTMQueueItems) : [];
+    const automixItems = queueState ? queueState.automixItems?.map(mapYTMQueueItems) : [];
     this.queue = queueState
       ? {
           // automixItems comes from an autoplay queue that isn't pushed yet to the main queue. A radio will never have automixItems (weird YTM distinction from autoplay vs radio)
-          automixItems: queueState.automixItems.map(mapYTMQueueItems),
+          automixItems: automixItems,
           autoplay: queueState.autoplay,
           isGenerating: queueState.isGenerating,
           // Observed state seems to be a radio having infinite true while an autoplay queue has infinite false
