@@ -65,7 +65,10 @@ const transformPlayerState = (state: PlayerState) => {
           durationSeconds: state.videoDetails.durationSeconds,
           id: state.videoDetails.id,
           isLive: state.videoDetails.isLive,
-          videoType: state.videoDetails.videoType
+          videoType: state.videoDetails.videoType,
+          // API Users: In YTM the initial player response for a song may not contain filled out metadata is fetched via another requests. This indicates that is complete.
+          //            For context you can refer to YTM playing a song but the player bar not displaying the information for the song yet. This is that behavior.
+          metadataFilled: state.hasFullMetadata
         }
       : null,
     // API Users:
