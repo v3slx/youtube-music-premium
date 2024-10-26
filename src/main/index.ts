@@ -850,8 +850,8 @@ function ytmViewNavigated() {
     if (url.startsWith("https://music.youtube.com/")) {
       lastUrl = url;
       ytmView.webContents.send("ytmView:navigationStateChanged", {
-        canGoBack: ytmView.webContents.canGoBack(),
-        canGoForward: ytmView.webContents.canGoForward()
+        canGoBack: ytmView.webContents.navigationHistory.canGoBack(),
+        canGoForward: ytmView.webContents.navigationHistory.canGoForward()
       });
     }
   }
