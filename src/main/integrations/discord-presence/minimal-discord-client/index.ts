@@ -8,7 +8,7 @@ import { existsSync, statSync } from "node:fs";
 function directoryExists(dirPath: string): boolean {
   try {
     return existsSync(dirPath) && statSync(dirPath).isDirectory();
-  } catch (error) {
+  } catch {
     return false;
   }
 }

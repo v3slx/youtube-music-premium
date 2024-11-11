@@ -29,9 +29,9 @@ import {
   YouTubeMusicTimeOutError,
   YouTubeMusicUnavailableError
 } from "../../api-shared/errors";
+import path from "node:path";
 
-declare const AUTHORIZE_COMPANION_WINDOW_WEBPACK_ENTRY: string;
-declare const AUTHORIZE_COMPANION_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
+declare const ALL_WINDOWS_VITE_DEV_SERVER_URL: string;
 
 const transformPlayerState = (state: PlayerState) => {
   return {
@@ -323,11 +323,12 @@ const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> =
         webPreferences: {
           sandbox: true,
           contextIsolation: true,
-          preload: AUTHORIZE_COMPANION_WINDOW_PRELOAD_WEBPACK_ENTRY,
+          preload: path.join(__dirname, `../renderer/windows/authorize-companion/preload.js`),
           additionalArguments: [requestId, authData.appName, request.body.code]
         }
       });
-      authorizationWindow.loadURL(AUTHORIZE_COMPANION_WINDOW_WEBPACK_ENTRY);
+      if (ALL_WINDOWS_VITE_DEV_SERVER_URL) authorizationWindow.loadURL(ALL_WINDOWS_VITE_DEV_SERVER_URL + "/windows/authorize-companion/index.html");
+      else authorizationWindow.loadFile(path.join(__dirname, `../renderer/windows/authorize-companion/index.html`));
       authorizationWindow.show();
       authorizationWindow.flashFrame(true);
 

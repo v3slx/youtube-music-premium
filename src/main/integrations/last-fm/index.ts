@@ -308,7 +308,7 @@ export default class LastFM implements IIntegration {
       if (this.lastfmDetails.token) {
         this.store.set("lastfm.token", safeStorage.encryptString(this.lastfmDetails.token).toString("hex"));
       }
-    } catch (error) {
+    } catch {
       // Do nothing, the values are not valid and can be ignored
     }
   }

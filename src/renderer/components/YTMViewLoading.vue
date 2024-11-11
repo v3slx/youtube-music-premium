@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeMount, ref } from "vue";
+import logo from "~assets/icons/ytmd.png";
 
 const memoryStore = window.ytmd.memoryStore;
 
@@ -27,7 +28,7 @@ memoryStore.onStateChanged(newState => {
   <div class="ytmview-loading-container">
     <Transition name="fade">
       <div v-if="ytmViewLoading" class="ytmview-loading">
-        <img class="logo" :src="require('~assets/icons/ytmd.png')" />
+        <img class="logo" :src="logo" />
         <div class="music-loader">
           <div class="loader-line"></div>
           <div class="loader-line"></div>

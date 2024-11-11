@@ -3,13 +3,9 @@ import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerRpm } from "@electron-forge/maker-rpm";
-import { WebpackPlugin } from "@electron-forge/plugin-webpack";
+import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
-
-import { FuseV1Options, FuseVersion } from "@electron/fuses/dist/index";
-
-import { mainConfig } from "./webpack.main.config";
-import { rendererConfig } from "./webpack.renderer.config";
+import { FuseV1Options, FuseVersion } from "@electron/fuses";
 
 // There is probably a better way to do this, such as fetching it directly from forge
 let makerArch = null;
@@ -78,51 +74,52 @@ const config: ForgeConfig = {
     }
   ],
   plugins: [
-    new WebpackPlugin({
-      mainConfig,
-      renderer: {
-        config: rendererConfig,
-        entryPoints: [
-          {
-            html: "./src/renderer/windows/main/index.html",
-            js: "./src/renderer/windows/main/renderer.ts",
-            name: "main_window",
-            preload: {
-              js: "./src/renderer/windows/main/preload.ts"
-            },
-            additionalChunks: ["shared", "vueSharedComponents", "vendorVue"]
-          },
-          {
-            html: "./src/renderer/windows/settings/index.html",
-            js: "./src/renderer/windows/settings/renderer.ts",
-            name: "settings_window",
-            preload: {
-              js: "./src/renderer/windows/settings/preload.ts"
-            },
-            additionalChunks: ["shared", "vueSharedComponents", "vendorVue"]
-          },
-          {
-            html: "./src/renderer/windows/authorize-companion/index.html",
-            js: "./src/renderer/windows/authorize-companion/renderer.ts",
-            name: "authorize_companion_window",
-            preload: {
-              js: "./src/renderer/windows/authorize-companion/preload.ts"
-            },
-            additionalChunks: ["shared", "vueSharedComponents", "vendorVue"]
-          },
-          {
-            name: "ytm_view",
-            preload: {
-              js: "./src/renderer/ytmview/preload.ts"
-            }
-          }
-        ]
-      }
+    new VitePlugin({
+      build: [
+        {
+          entry: "src/main/index.ts",
+          config: "viteconfig/main.ts",
+          target: "main"
+        },
+        // TODO: Utilize a single config for preload so we can share chunks if needed
+        {
+          entry: "src/renderer/windows/main/preload.ts",
+          config: "viteconfig/preload/main_window.ts",
+          target: "preload"
+        },
+        {
+          entry: "src/renderer/windows/settings/preload.ts",
+          config: "viteconfig/preload/settings_window.ts",
+          target: "preload"
+        },
+        {
+          entry: "src/renderer/windows/authorize-companion/preload.ts",
+          config: "viteconfig/preload/authorize_companion_window.ts",
+          target: "preload"
+        },
+        {
+          entry: "src/renderer/ytmview/preload.ts",
+          config: "viteconfig/preload/ytmview.ts",
+          target: "preload"
+        }
+      ],
+      renderer: [
+        // Instead of opting for defining each window as a separate object we bundle them all together and have a more custom output to share chunks
+        {
+          name: "all_windows",
+          config: "viteconfig/renderer.ts"
+        }
+      ]
     }),
     new FusesPlugin({
       version: FuseVersion.V1,
       resetAdHocDarwinSignature: process.platform === "darwin" && makerArch == "arm64",
-      [FuseV1Options.EnableCookieEncryption]: true
+      [FuseV1Options.RunAsNode]: false,
+      [FuseV1Options.EnableCookieEncryption]: true,
+      [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
+      [FuseV1Options.EnableNodeCliInspectArguments]: false,
+      [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
+      [FuseV1Options.OnlyLoadAppFromAsar]: true
     })
   ]
 };
