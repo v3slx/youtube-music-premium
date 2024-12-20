@@ -13,6 +13,7 @@
   let libraryButton = document.createElement("yt-button-shape");
   libraryButton.classList.add("ytmd-player-bar-control");
   libraryButton.classList.add("library-button");
+  libraryButton.set("iconName", "yt-sys-icons:library_add");
   libraryButton.set("data", {
     focused: false,
     iconPosition: "icon-only",
@@ -62,7 +63,7 @@
   let playlistButton = document.createElement("yt-button-shape");
   playlistButton.classList.add("ytmd-player-bar-control");
   playlistButton.classList.add("playlist-button");
-  playlistButton.set("icon", "yt-sys-icons:playlist_add");
+  playlistButton.set("iconName", "yt-sys-icons:playlist_add");
   playlistButton.set("data", {
     focused: false,
     iconPosition: "icon-only",
@@ -504,16 +505,16 @@
             if (item.toggleMenuServiceItemRenderer.defaultIcon.iconType === "LIBRARY_SAVED") {
               // Default value is saved to library (false == remove from library, true == add to library)
               if (libraryButton.data.toggled) {
-                libraryButton.set("icon", "yt-sys-icons:library_add");
+                libraryButton.set("iconName", "yt-sys-icons:library_add");
               } else {
-                libraryButton.set("icon", "yt-sys-icons:library_saved");
+                libraryButton.set("iconName", "yt-sys-icons:library_saved");
               }
             } else if (item.toggleMenuServiceItemRenderer.defaultIcon.iconType === "LIBRARY_ADD") {
               // Default value is add to library (false == add to library, true == remove from library)
               if (libraryButton.data.toggled) {
-                libraryButton.set("icon", "yt-sys-icons:library_saved");
+                libraryButton.set("iconName", "yt-sys-icons:library_saved");
               } else {
-                libraryButton.set("icon", "yt-sys-icons:library_add");
+                libraryButton.set("iconName", "yt-sys-icons:library_add");
               }
             }
             break;
