@@ -1,4 +1,4 @@
-import playerStateStore, { PlayerState, Thumbnail, VideoState, VideoDetails } from "../../player-state-store";
+import playerStateStore, { PlayerState, Thumbnail, VideoDetails, VideoState } from "../../player-state-store";
 import IIntegration from "../integration";
 import MemoryStore from "../../memory-store";
 import { MemoryStoreSchema } from "~shared/store/schema";
@@ -10,7 +10,7 @@ const DISCORD_CLIENT_ID = "1143202598460076053";
 
 function getHighestResThumbnail(thumbnails: Thumbnail[]): string {
   return thumbnails.reduce(
-    (accumulator, current) => (current.height * current.width >= accumulator.height * accumulator.width ? accumulator : current),
+    (accumulator, current) => (current.height * current.width <= accumulator.height * accumulator.width ? accumulator : current),
     thumbnails[0]
   ).url;
 }
@@ -104,7 +104,7 @@ export default class DiscordPresence implements IIntegration {
       this.activityDebounceTimeout = null;
     }, 1000);
   }
-  
+
   private playerStateChanged(state: PlayerState) {
     if (!this.ready) return;
 
@@ -190,7 +190,9 @@ export default class DiscordPresence implements IIntegration {
     clearTimeout(this.connectionRetryTimeout);
     this.activityDebounceTimeout = this.pauseTimeout = this.connectionRetryTimeout = null;
 
-    if (this.stateCallback) playerStateStore.removeEventListener(this.stateCallback);
+    if (this.stateCallback) {
+      playerStateStore.removeEventListener(this.stateCallback);
+    }
 
     if (!this.discordClient) return;
     this.ready = false;
