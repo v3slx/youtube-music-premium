@@ -19,7 +19,7 @@ try {
 }
 
 // HEAD is used for production builds as they check out version tags in a detached HEAD state
-const devBuild = gitBranch !== "HEAD" || process.env.NODE_ENV === "development";
+const devBuild = gitBranch !== "HEAD" && process.env.NODE_ENV === "development";
 
 // https://vitejs.dev/config
 export default defineConfig({
