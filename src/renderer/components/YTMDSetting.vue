@@ -49,8 +49,8 @@ const selectedOption = computed(() => {
 });
 
 // This function should be using ModelValue[T] but because it's bound to @click it doesn't interpret it as correct
-function select(optionKey: number) {
-  value.value = optionKey as ModelValue[T];
+function select(optionKey: string) {
+  value.value = Number.parseInt(optionKey) as ModelValue[T];
   selectOpen.value = false;
   emit("change");
 }

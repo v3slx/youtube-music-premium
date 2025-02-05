@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import KeybindInput from "../../components/KeybindInput.vue";
 import YTMDSetting from "../../components/YTMDSetting.vue";
-import { StoreSchema } from "~shared/store/schema";
+import { StoreSchema, TrayIconStyle } from "~shared/store/schema";
 import { AuthToken } from "~shared/integrations/companion-server/types";
 import logo from "~assets/icons/ytmd.png";
 
@@ -14,6 +14,7 @@ const ytmdCommitHash = YTMD_GIT_COMMIT_HASH.substring(0, 7);
 const ytmdBranch = YTMD_GIT_BRANCH;
 
 const isDarwin = window.ytmd.isDarwin;
+const isLinux = window.ytmd.isLinux;
 
 const currentTab = ref(1);
 const requiresRestart = ref(false);
@@ -45,6 +46,7 @@ const alwaysShowVolumeSlider = ref<boolean>(appearance.alwaysShowVolumeSlider);
 const customCSSEnabled = ref<boolean>(appearance.customCSSEnabled);
 const customCSSPath = ref<string>(appearance.customCSSPath);
 const zoom = ref<number>(appearance.zoom);
+const trayIconStyle = ref<number>(appearance.trayIconStyle);
 
 const continueWhereYouLeftOff = ref<boolean>(playback.continueWhereYouLeftOff);
 const continueWhereYouLeftOffPaused = ref<boolean>(playback.continueWhereYouLeftOffPaused);
@@ -82,6 +84,7 @@ store.onDidAnyChange(async newState => {
   customCSSEnabled.value = newState.appearance.customCSSEnabled;
   customCSSPath.value = newState.appearance.customCSSPath;
   zoom.value = newState.appearance.zoom;
+  trayIconStyle.value = newState.appearance.trayIconStyle;
 
   continueWhereYouLeftOff.value = newState.playback.continueWhereYouLeftOff;
   continueWhereYouLeftOffPaused.value = newState.playback.continueWhereYouLeftOffPaused;
@@ -154,6 +157,7 @@ async function settingsChanged() {
   store.set("appearance.alwaysShowVolumeSlider", alwaysShowVolumeSlider.value);
   store.set("appearance.customCSSEnabled", customCSSEnabled.value);
   store.set("appearance.zoom", zoom.value);
+  store.set("appearance.trayIconStyle", trayIconStyle.value);
 
   store.set("playback.continueWhereYouLeftOff", continueWhereYouLeftOff.value);
   store.set("playback.continueWhereYouLeftOffPaused", continueWhereYouLeftOffPaused.value);
@@ -183,8 +187,6 @@ async function settingChangedRequiresRestart() {
 
 async function settingChangedFile(event: Event) {
   const target = event.target as HTMLInputElement;
-
-  console.log(event);
 
   const setting = target.dataset.setting;
   if (!setting) {
@@ -313,6 +315,14 @@ window.ytmd.handleUpdateDownloaded(() => {
             @clear="removeCustomCSSPath"
           />
           <YTMDSetting v-model="zoom" type="range" max="300" min="30" step="10" name="Zoom" @change="settingsChanged" />
+          <YTMDSetting
+            v-if="isLinux"
+            v-model="trayIconStyle"
+            :options-map="{ [TrayIconStyle.Auto]: 'Auto', [TrayIconStyle.White]: 'White', [TrayIconStyle.Black]: 'Black' }"
+            type="select"
+            name="Tray icon style"
+            @change="settingsChanged"
+          />
         </div>
 
         <div v-if="currentTab === 3" class="playback-tab">

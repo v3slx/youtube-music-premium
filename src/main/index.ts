@@ -11,6 +11,7 @@ import {
   Menu,
   MenuItemConstructorOptions,
   nativeImage,
+  nativeTheme,
   safeStorage,
   screen,
   session,
@@ -25,7 +26,7 @@ import electronSquirrelStartup from "electron-squirrel-startup";
 
 import MemoryStore from "./memory-store";
 import playerStateStore, { PlayerState, VideoState } from "./player-state-store";
-import { MemoryStoreSchema, StoreSchema } from "~shared/store/schema";
+import { MemoryStoreSchema, StoreSchema, TrayIconStyle } from "../shared/store/schema";
 
 import CompanionServer from "./integrations/companion-server";
 import CustomCSS from "./integrations/custom-css";
@@ -172,7 +173,7 @@ const ytmViewIntegrationScripts: { [name: string]: { [name: string]: string } } 
 let mainWindow: BrowserWindow = null;
 let settingsWindow: BrowserWindow = null;
 let ytmView: BrowserView = null;
-let tray = null;
+let tray: Tray = null;
 let trayContextMenu = null;
 
 // These variables tend to be changed often so we store it in memory and write on close (less disk usage)
@@ -352,7 +353,8 @@ const store = new Conf<StoreSchema>({
       alwaysShowVolumeSlider: false,
       customCSSEnabled: false,
       customCSSPath: null,
-      zoom: 100
+      zoom: 100,
+      trayIconStyle: TrayIconStyle.Auto
     },
     playback: {
       continueWhereYouLeftOff: true,
@@ -415,6 +417,11 @@ const store = new Conf<StoreSchema>({
       if (!store.has("lastfm.scrobblePercent")) {
         store.set("lastfm.scrobblePercent", 50);
       }
+    },
+    ">=2.0.7": store => {
+      if (!store.has("appearance.trayIconStyle")) {
+        store.set("appearance.trayIconStyle", 0);
+      }
     }
   }
 });
@@ -461,6 +468,7 @@ store.onDidAnyChange(async (newState, oldState) => {
     customCss.disable();
     log.info("Integration disabled: Custom CSS");
   }
+  if (oldState.appearance.trayIconStyle !== newState.appearance.trayIconStyle) setTrayIcon();
 
   // Playback
   if (newState.playback.ratioVolume) {
@@ -662,6 +670,31 @@ function setupTaskbarFeatures() {
       mainWindow.setProgressBar(-1);
     }
   });
+}
+
+function trayIconFileName(style: TrayIconStyle) {
+  if (process.platform === "win32") return "tray.ico";
+  if (process.platform === "darwin") return "trayTemplate.png";
+
+  let color: "white" | "black";
+  if (style === TrayIconStyle.White) {
+    color = "white";
+  } else if (style === TrayIconStyle.Black) {
+    color = "black";
+  } else {
+    color = nativeTheme.shouldUseDarkColors ? "white" : "black";
+  }
+  return `ytmd_${color}.png`;
+}
+
+function getTrayIconPath() {
+  const style = store.get("appearance").trayIconStyle;
+  const iconsDir = process.env.NODE_ENV === "development" ? path.join(app.getAppPath(), "src/assets/icons") : process.resourcesPath;
+  return path.join(iconsDir, trayIconFileName(style));
+}
+
+function setTrayIcon() {
+  tray.setImage(getTrayIconPath());
 }
 
 // Shortcut registration
@@ -1770,12 +1803,7 @@ app.on("ready", async () => {
   registerShortcuts();
 
   // Create the tray
-  tray = new Tray(
-    path.join(
-      process.env.NODE_ENV === "development" ? path.join(app.getAppPath(), "src/assets/icons") : process.resourcesPath,
-      process.platform === "win32" ? "tray.ico" : "trayTemplate.png"
-    )
-  );
+  tray = new Tray(getTrayIconPath());
   trayContextMenu = Menu.buildFromTemplate([
     {
       label: "YouTube Music Desktop",
@@ -1924,6 +1952,8 @@ app.on("ready", async () => {
     lastFMScrobbler.enable();
     log.info("Integration enabled: Last.fm");
   }
+
+  nativeTheme.on("updated", setTrayIcon);
 });
 
 app.on("before-quit", () => {

@@ -25,6 +25,8 @@ const config: ForgeConfig = {
       "./src/assets/icons/trayTemplate.png",
       "./src/assets/icons/trayTemplate@2x.png",
       "./src/assets/icons/ytmd.png",
+      "./src/assets/icons/ytmd_white.png",
+      "./src/assets/icons/ytmd_black.png",
 
       "./src/assets/icons/controls/pause-button.png",
       "./src/assets/icons/controls/play-button.png",
