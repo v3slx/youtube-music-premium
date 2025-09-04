@@ -7,7 +7,7 @@
   }
 
   const ytmStore = window.__YTMD_HOOK__.ytmStore;
-  const wizButtonShapeEnabled = isExperimentEnabled("web_wiz_button_shape");
+  const wizButtonShapeEnabled = true; // TODO: Remove this - 9/3/2025 YTM did a UI update and the experiment flag associated with this is gone as its now default enabled
 
   let ytmdControlButtons = {};
 
@@ -173,12 +173,16 @@
   });
 
   let rightControls = document.querySelector("ytmusic-app-layout>ytmusic-player-bar").querySelector(".right-controls-buttons");
-  let sleepTimerButton = document.createElement("tp-yt-paper-icon-button");
+  let sleepTimerButton = document.createElement("yt-icon-button");
+
+  let sleepTimerIcon = document.createElement("yt-icon");
+  sleepTimerIcon.set("icon", "TIMER");
+  sleepTimerButton.appendChild(sleepTimerIcon);
+
   sleepTimerButton.setAttribute("title", "Sleep timer off");
   sleepTimerButton.classList.add("ytmusic-player-bar");
   sleepTimerButton.classList.add("ytmd-player-bar-control");
   sleepTimerButton.classList.add("sleep-timer-button");
-  sleepTimerButton.set("icon", "yt-sys-icons:stopwatch");
   sleepTimerButton.onclick = () => {
     sleepTimerButton.dispatchEvent(
       new CustomEvent("yt-action", {
