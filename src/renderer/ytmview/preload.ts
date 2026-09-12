@@ -220,24 +220,27 @@ async function createAdditionalPlayerBarControls() {
 // and for one painted frame of the laid out app avoids that.
 async function waitForYTMToRender() {
   const startedAt = Date.now();
-  await webFrame.executeJavaScript(`
+  // Only timers here, never requestAnimationFrame: the view is not attached to the window until this resolves,
+  // and Chromium runs no animation frames for a view that isn't painted, which would wait forever
+  const rendered = webFrame.executeJavaScript(`
     (function() {
       return new Promise(resolve => {
         const start = Date.now();
         const check = () => {
           const layout = document.querySelector("ytmusic-app-layout");
           const laidOut = layout && layout.getBoundingClientRect().height > 0 && !!document.querySelector("ytmusic-player-bar");
-          // Deliberately not waiting for thumbnails: pages without them would stall behind the timeout below
-          if (laidOut || Date.now() - start > 4000) {
-            document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          if (laidOut || Date.now() - start > 3000) {
+            Promise.race([document.fonts.ready, new Promise(done => setTimeout(done, 1000))]).then(() => resolve());
             return;
           }
-          requestAnimationFrame(check);
+          setTimeout(check, 100);
         };
         check();
       });
     })()
   `);
+  // Revealing the view is what matters, a late render is only cosmetic, so never wait longer than this
+  await Promise.race([rendered, new Promise(resolve => setTimeout(resolve, 5000))]);
   console.log(`YTMD: waited ${Date.now() - startedAt}ms for YTM to render`);
 }
 
