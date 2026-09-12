@@ -270,9 +270,12 @@ memoryStore.onStateChanged((newState, oldState) => {
 log.info("Created memory store");
 
 function shouldDisableUpdates() {
-  // This custom build must never update from the official YTMDesktop release feed, that would replace it with
-  // the official app. (Upstream also disables updates on macOS/Linux as they are unsupported there.)
-  return true;
+  // Updates come from this build's own repository (see YTMD_UPDATE_FEED_OWNER), never from the official
+  // YTMDesktop feed. update.electronjs.org only serves public repositories, so this stays without effect
+  // until the repository is public and has releases, which the error handler below tolerates.
+  // macOS needs a code signature and Linux is not supported by the update server.
+  if (process.platform !== "win32") return true;
+  return false;
 }
 
 // Configure the autoupdater

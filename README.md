@@ -4,115 +4,104 @@
 
 # YouTube Music Premium
 
-**Ein eigener Desktop-Client für YouTube Music.**
-Aufgebaut auf [YTMDesktop](https://github.com/ytmdesktop/ytmdesktop), erweitert um Themes, mitlaufende Songtexte, freie Wahl des Audio-Ausgabegeräts und eine anpassbare Discord-Anzeige.
+**A desktop client for YouTube Music.**
+Built on [YTMDesktop](https://github.com/ytmdesktop/ytmdesktop), with built-in themes, synced lyrics, audio output device selection and a configurable Discord presence.
 
 ![Version](https://img.shields.io/badge/Version-2.0.15-e8314c?style=for-the-badge)
-![Plattform](https://img.shields.io/badge/Windows-x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
+![Platform](https://img.shields.io/badge/Windows-x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-44-47848F?style=for-the-badge&logo=electron&logoColor=white)
-![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0-brightgreen?style=for-the-badge)
+![License](https://img.shields.io/badge/License-GPL--3.0-brightgreen?style=for-the-badge)
 
 ![YouTube Music Premium](.github/images/readme_main.png)
 
 </div>
 
-## Was ist das?
+## What this is
 
-YouTube Music im eigenen Fenster, mit Tastenkürzeln, Tray-Symbol und Discord-Anzeige — und mit ein paar Dingen, die es weder im Browser noch im offiziellen YTMDesktop gibt.
+YouTube Music in its own window, with global shortcuts, a tray icon and Discord rich presence — plus a few things neither the browser nor the official YTMDesktop gives you.
 
-Diese Version installiert sich **neben** dem offiziellen YTMDesktop und holt sich **keine Updates** von dort, damit die eigenen Anpassungen nicht überschrieben werden.
+This build installs **next to** the official YTMDesktop and never updates from it, so its changes can't be overwritten.
 
-## Eigene Funktionen
+## What this build adds
 
-### 🎨 Eingebaute Themes
+### Built-in themes
 
-Drei fertige Farbwelten: **Midnight**, **Ocean** und **Forest**. Sie setzen an den Farbvariablen von YouTube Music an, nicht an einzelnen Kästen, deshalb bleibt die Oberfläche durchgehend eingefärbt — inklusive der Stelle, an der YouTube Music seinen Kopfbereich-Verlauf sonst gekachelt als Streifen wiederholt.
+Three ready-made colour schemes: **Midnight**, **Ocean** and **Forest**. They override YouTube Music's own colour variables rather than painting over individual containers, so the whole interface stays consistent — including the spot where YouTube Music otherwise repeats its header gradient as visible stripes.
 
-Zu finden unter **Einstellungen → Appearance → Theme**. Custom CSS funktioniert weiterhin zusätzlich.
+Found under **Settings → Appearance → Theme**. Custom CSS still works on top of it.
 
-### 🎤 Mitlaufende Songtexte
+### Synced lyrics
 
-Der Songtext-Tab zeigt den Text **synchron zum Song**:
+The lyrics tab follows along with the song:
 
-- die aktuelle Zeile ist hervorgehoben, der Text scrollt automatisch mit
-- ein Klick auf eine Zeile springt an die passende Stelle im Song
-- scrollt man selbst weg, hält das automatische Scrollen an und ein Knopf bringt zurück zur laufenden Zeile
-- **Schriftgröße** und **Zeitversatz** sind einstellbar, beide wirken sofort
+- the current line is highlighted and the text scrolls along
+- clicking a line jumps to that point in the song
+- scrolling yourself pauses the auto scroll and a button brings you back to the current line
+- **font size** and **timing offset** are adjustable and apply instantly
 
-Die Daten kommen von YouTube selbst, also derselben Quelle wie in der Handy-App. Für Songs ohne synchrone Texte und für Musikvideos bleibt der normale Text von YouTube Music stehen.
+The data comes from YouTube itself, the same source the mobile app uses. Songs without synced lyrics and music videos keep YouTube Music's plain lyrics.
 
-### 🔊 Audio-Ausgabegerät wählen
+### Audio output device
 
-Die App kann ihren Ton gezielt auf ein bestimmtes Gerät legen, unabhängig vom Standardgerät von Windows. Praktisch für Kopfhörer, virtuelle Kabel oder ein zweites Interface.
+Send the app's audio to a specific device, independent of the Windows default. Handy for headphones, virtual cables or a second interface.
 
-Zu finden unter **Einstellungen → Playback → Audio output device**.
+Found under **Settings → Playback → Audio output device**.
 
-### 💬 Discord nach eigenem Geschmack
+### Discord presence, your way
 
-- **eigene Discord-Anwendung** eintragbar, damit im Status ein selbst gewählter Name steht, zum Beispiel „Hört YouTube Music Premium zu“
-- Button **„Auf YouTube Music anhören“**, der auch bei Freunden ohne YTMDesktop funktioniert
-- kein doppelter Titel mehr bei Singles, bei denen das Album genauso heißt wie der Song
+- set your **own Discord application ID**, so the status shows a name you picked, for example "Listening to YouTube Music Premium"
+- a **"Listen on YouTube Music"** button that works for friends without YTMDesktop
+- no more duplicated title for singles whose album has the same name as the song
 
-### 🧭 Kleinigkeiten
+### Smaller fixes
 
-- Das ausgeklappte Suchfeld liegt nicht mehr über den Zurück- und Vor-Pfeilen
-- Eigener Name, eigenes Symbol und eigener Installationsordner
+- the expanded search box no longer covers the back and forward arrows
+- the view is revealed only once YouTube Music has finished rendering, instead of flashing unstyled text in the corner
+- own name, own icon and own installation folder
 
-Alles aus YTMDesktop bleibt erhalten: Companion-Server, Last.fm, Custom CSS, globale Tastenkürzel, Tray-Steuerung und Fortschritt in der Taskleiste.
+Everything from YTMDesktop stays: companion server, Last.fm, custom CSS, global shortcuts, tray controls and taskbar progress.
 
-## Einstellungen auf einen Blick
+## Settings at a glance
 
-| Einstellung | Ort | Standard |
+| Setting | Where | Default |
 | --- | --- | --- |
 | Theme | Appearance | YouTube Music default |
-| Synced lyrics | Playback | an |
+| Synced lyrics | Playback | on |
 | Lyrics font size | Playback | 24 px |
 | Lyrics offset | Playback | 0 ms |
 | Audio output device | Playback | System default |
-| Discord application ID | Integrations | offizielle YTMD-Anwendung |
+| Discord application ID | Integrations | official YTMD application |
 
-## Installation
+## Install
 
-Es gibt keine öffentlichen Releases, die Installer werden selbst gebaut (siehe unten). Danach liegen unter `out/make/` zwei Varianten:
+Grab the installer from the [releases page](https://github.com/Skorbjen/youtube-music-premium/releases), or build it yourself (see below) and take it from `out/make/squirrel.windows/x64/`.
 
-| Datei | Was sie tut |
-| --- | --- |
-| `nsis/YouTube Music Premium Setup <Version>.exe` | Setup-Assistent mit Ordnerwahl und Desktop-Verknüpfung |
-| `squirrel.windows/x64/YouTube Music Premium Quick Setup.exe` | Ein-Klick-Installer ohne Rückfragen |
+`YouTube Music Premium Quick Setup.exe` installs without asking questions and starts the app when it's done. Once releases are published, the app updates itself from this repository. Quit the app completely, including the tray icon, before installing over an existing version.
 
-Beide installieren dieselbe App. Vor einem Update die App komplett beenden, auch im Tray.
+## Development
 
-## Entwicklung
-
-Gebraucht werden [Git](https://git-scm.com) und [Node.js](https://nodejs.org) (v20 oder neuer).
+You need [Git](https://git-scm.com) and [Node.js](https://nodejs.org) (v20 or newer).
 
 ```sh
 git clone https://github.com/Skorbjen/youtube-music-premium.git
 cd youtube-music-premium
 
-# Yarn bereitstellen (liegt dem Projekt bei)
+# Yarn ships with the project
 corepack enable
 
 yarn install
 yarn start
 ```
 
-Installer bauen:
+Build the installer:
 
 ```sh
-# beide Installer (Squirrel + NSIS-Assistent)
-yarn make:all
-
-# nur der Squirrel-Schnellinstaller
 yarn make
-
-# nur der NSIS-Assistent (setzt ein gebautes Paket voraus)
-yarn make:nsis
 ```
 
-Die Grafiken der Installer liegen in `installer/` und lassen sich mit `python installer/generate-images.py` neu erzeugen (benötigt Pillow).
+The installer animation lives in `src/assets/installer/` and can be regenerated with `python scripts/generate-installer-image.py` (needs Pillow).
 
-## Mitwirkende
+## Contributors
 
 <table>
   <tr>
@@ -131,8 +120,8 @@ Die Grafiken der Installer liegen in `installer/` und lassen sich mit `python in
   </tr>
 </table>
 
-## Lizenz und Dank
+## License and credits
 
-Dieses Projekt baut auf [YTMDesktop](https://github.com/ytmdesktop/ytmdesktop) auf und steht wie das Original unter der **GPL-3.0**. Dank an das YTMDesktop-Team und alle, die dort mitgearbeitet haben.
+This project builds on [YTMDesktop](https://github.com/ytmdesktop/ytmdesktop) and is licensed under **GPL-3.0**, like the original. Thanks to the YTMDesktop team and everyone who contributed there.
 
-Dieses Projekt steht in keiner Verbindung zu Google oder YouTube.
+This project is not affiliated with Google or YouTube.

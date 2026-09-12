@@ -215,6 +215,32 @@ async function createAdditionalPlayerBarControls() {
   (await webFrame.executeJavaScript(playerBarControlsScript))();
 }
 
+// YTM renders its markup before its own stylesheet is applied, so revealing the view too early shows a
+// flash of unstyled content (stray labels in the top left corner, missing icons). Waiting for the fonts
+// and for one painted frame of the laid out app avoids that.
+async function waitForYTMToRender() {
+  const startedAt = Date.now();
+  await webFrame.executeJavaScript(`
+    (function() {
+      return new Promise(resolve => {
+        const start = Date.now();
+        const check = () => {
+          const layout = document.querySelector("ytmusic-app-layout");
+          const laidOut = layout && layout.getBoundingClientRect().height > 0 && !!document.querySelector("ytmusic-player-bar");
+          // Deliberately not waiting for thumbnails: pages without them would stall behind the timeout below
+          if (laidOut || Date.now() - start > 4000) {
+            document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            return;
+          }
+          requestAnimationFrame(check);
+        };
+        check();
+      });
+    })()
+  `);
+  console.log(`YTMD: waited ${Date.now() - startedAt}ms for YTM to render`);
+}
+
 async function addTimedLyrics() {
   (await webFrame.executeJavaScript(timedLyricsScript))();
 }
@@ -756,6 +782,8 @@ window.addEventListener("load", async () => {
       }
     }
   });
+
+  await waitForYTMToRender();
 
   ipcRenderer.send("ytmView:loaded");
 });
