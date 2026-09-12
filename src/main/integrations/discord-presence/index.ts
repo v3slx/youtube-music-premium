@@ -7,14 +7,7 @@ import log from "electron-log";
 import { DiscordActivityType } from "./minimal-discord-client/types";
 import Conf from "conf";
 
-const DEFAULT_DISCORD_CLIENT_ID = "1143202598460076053";
-// Custom Discord applications don't have the YTMD art assets uploaded, so they reference the public
-// assets of the default application through Discord's CDN instead of by asset key
-const DEFAULT_APPLICATION_ASSET_IDS: Record<string, string> = {
-  "ytmd-logo": "1143211263132958840",
-  "play-border": "1143207310794182666",
-  "pause-border": "1143207309460377631"
-};
+const DEFAULT_DISCORD_CLIENT_ID = "1548008608577364078";
 
 function resolveClientId(configuredClientId: string | undefined): string {
   const clientId = (configuredClientId ?? "").trim();
@@ -27,19 +20,6 @@ function getHighestResThumbnail(thumbnails: Thumbnail[]): string {
     (accumulator, current) => (current.height * current.width <= accumulator.height * accumulator.width ? accumulator : current),
     thumbnails[0]
   ).url;
-}
-
-function getSmallImageKey(state: VideoState) {
-  // Developer Note:
-  // You can add "-invert" to the end of the image key to invert (Black with White Border)
-  switch (state) {
-    case VideoState.Playing: {
-      return "play-border";
-    }
-    default: {
-      return "pause-border";
-    }
-  }
 }
 
 function getSmallImageText(state: VideoState) {
@@ -68,7 +48,6 @@ export default class DiscordPresence implements IIntegration {
   private memoryStore: MemoryStore<MemoryStoreSchema>;
 
   private discordClient: DiscordClient = null;
-  private usesDefaultApplication = true;
   private enabled = false;
   private ready = false;
   private activityDebounceTimeout: NodeJS.Timeout | null = null;
@@ -81,11 +60,6 @@ export default class DiscordPresence implements IIntegration {
   private progress: number | null = null;
 
   private connectionRetries: number = 0;
-
-  private getImage(assetKey: string): string {
-    if (this.usesDefaultApplication) return assetKey;
-    return `https://cdn.discordapp.com/app-assets/${DEFAULT_DISCORD_CLIENT_ID}/${DEFAULT_APPLICATION_ASSET_IDS[assetKey]}.png`;
-  }
 
   private UpdateActivity() {
     if (this.activityDebounceTimeout) return;
@@ -110,22 +84,23 @@ export default class DiscordPresence implements IIntegration {
           end: this.videoState === VideoState.Playing ? Date.now() + (durationSeconds - this.progress) * 1000 : undefined
         },
         assets: {
-          large_image: (thumbnail?.length ?? 0) <= 256 ? thumbnail : this.getImage("ytmd-logo"),
+          large_image: (thumbnail?.length ?? 0) <= 256 ? thumbnail : undefined,
           large_text: showAlbum ? stringLimit(album, 128, 2) : undefined,
           large_url: albumId ? `https://music.youtube.com/browse/${albumId}` : undefined,
-          small_image: this.getImage(getSmallImageKey(this.videoState)),
+          // No small image: art assets would have to be uploaded to the configured Discord application
+          small_image: undefined,
           small_text: getSmallImageText(this.videoState)
         },
         instance: false,
         // Discord allows at most 2 buttons with labels up to 32 characters
         buttons: [
           {
-            // Works for everyone viewing the status, the YTMDesktop button only works if they have YTMDesktop installed
+            // Works for everyone viewing the status, the app link only works with this app installed
             label: "Auf YouTube Music anhören",
             url: `https://music.youtube.com/watch?v=${id}`
           },
           {
-            label: "Play on YTMDesktop",
+            label: "In der App öffnen",
             url: `ytmd://play/${id}`
           }
         ]
@@ -191,7 +166,6 @@ export default class DiscordPresence implements IIntegration {
     this.enabled = true;
     if (this.discordClient) return;
     const clientId = resolveClientId(this.store.get("integrations.discordPresenceClientId") as string | undefined);
-    this.usesDefaultApplication = clientId === DEFAULT_DISCORD_CLIENT_ID;
     this.discordClient = new DiscordClient(clientId);
 
     this.discordClient.on("connect", () => {

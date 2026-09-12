@@ -9,7 +9,7 @@ try {
   gitBranch = execSync("git rev-parse --abbrev-ref HEAD").toString();
   gitCommitHash = execSync("git rev-parse HEAD").toString();
 } catch (e) {
-  // User has likely downloaded from the YTM Desktop via the "Download ZIP".
+  // User has likely downloaded the repository via the "Download ZIP" option.
   // We don't plan to support this, but at least provide users with a bit of improved UX
   // by providing them with what to do rather than just leaving them in the dust.
   e.message =

@@ -270,8 +270,8 @@ memoryStore.onStateChanged((newState, oldState) => {
 log.info("Created memory store");
 
 function shouldDisableUpdates() {
-  // Updates come from this build's own repository (see YTMD_UPDATE_FEED_OWNER), never from the official
-  // YTMDesktop feed. update.electronjs.org only serves public repositories, so this stays without effect
+  // Updates come from this build's own repository (see YTMD_UPDATE_FEED_OWNER).
+  // update.electronjs.org only serves public repositories, so this stays without effect
   // until the repository is public and has releases, which the error handler below tolerates.
   // macOS needs a code signature and Linux is not supported by the update server.
   if (process.platform !== "win32") return true;
@@ -385,7 +385,7 @@ const store = new Conf<StoreSchema>({
       companionServerAuthTokens: null,
       companionServerCORSWildcardEnabled: false,
       discordPresenceEnabled: false,
-      discordPresenceClientId: "1143202598460076053",
+      discordPresenceClientId: "1548008608577364078",
       lastFMEnabled: false
     },
     shortcuts: {
@@ -463,6 +463,12 @@ const store = new Conf<StoreSchema>({
       }
       if (!store.has("playback.timedLyricsOffsetMs")) {
         store.set("playback.timedLyricsOffsetMs", 0);
+      }
+    },
+    ">=2.0.16": store => {
+      // Move installations that still point at the previously shipped Discord application to this build's own one
+      if (store.get("integrations.discordPresenceClientId") === "1143202598460076053") {
+        store.set("integrations.discordPresenceClientId", "1548008608577364078");
       }
     }
   }
@@ -1017,11 +1023,7 @@ const createOrShowSettingsWindow = (): void => {
   });
 
   settingsWindow.webContents.setWindowOpenHandler(details => {
-    if (
-      details.url === "https://github.com/ytmdesktop/ytmdesktop" ||
-      details.url === "https://ytmdesktop.github.io/" ||
-      details.url === "https://discord.com/developers/applications"
-    ) {
+    if (details.url === "https://github.com/Skorbjen/youtube-music-premium" || details.url === "https://discord.com/developers/applications") {
       shell.openExternal(details.url);
     }
 

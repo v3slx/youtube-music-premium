@@ -429,7 +429,7 @@ window.addEventListener("load", async () => {
     // The last page the user was on is already a page where it will be playing a song from (no point telling YTM to play it again)
     if (!state.lastUrl.startsWith("https://music.youtube.com/watch")) {
       if (state.lastVideoId) {
-        // This height transition check is a hack to fix the `Start playback` hint from not being in the correct position https://github.com/ytmdesktop/ytmdesktop/issues/1159
+        // This height transition check is a hack to keep the `Start playback` hint in the correct position
         let heightTransitionCount = 0;
         const transitionEnd = async (e: TransitionEvent) => {
           if (e.target === document.querySelector("ytmusic-app-layout>ytmusic-player-bar")) {

@@ -5,9 +5,9 @@
 # YouTube Music Premium
 
 **A desktop client for YouTube Music.**
-Built on [YTMDesktop](https://github.com/ytmdesktop/ytmdesktop), with built-in themes, synced lyrics, audio output device selection and a configurable Discord presence.
+Built-in themes, synced lyrics, audio output device selection and a configurable Discord presence.
 
-![Version](https://img.shields.io/badge/Version-2.0.15-e8314c?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-2.0.16-e8314c?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/Windows-x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-44-47848F?style=for-the-badge&logo=electron&logoColor=white)
 ![License](https://img.shields.io/badge/License-GPL--3.0-brightgreen?style=for-the-badge)
@@ -18,11 +18,9 @@ Built on [YTMDesktop](https://github.com/ytmdesktop/ytmdesktop), with built-in t
 
 ## What this is
 
-YouTube Music in its own window, with global shortcuts, a tray icon and Discord rich presence — plus a few things neither the browser nor the official YTMDesktop gives you.
+YouTube Music in its own window, with global shortcuts, a tray icon and Discord rich presence — plus a few things the browser doesn't give you.
 
-This build installs **next to** the official YTMDesktop and never updates from it, so its changes can't be overwritten.
-
-## What this build adds
+## Features
 
 ### Built-in themes
 
@@ -50,7 +48,7 @@ Found under **Settings → Playback → Audio output device**.
 ### Discord presence, your way
 
 - set your **own Discord application ID**, so the status shows a name you picked, for example "Listening to YouTube Music Premium"
-- a **"Listen on YouTube Music"** button that works for friends without YTMDesktop
+- a **"Listen on YouTube Music"** button that works for friends without the app installed
 - no more duplicated title for singles whose album has the same name as the song
 
 ### Smaller fixes
@@ -59,7 +57,7 @@ Found under **Settings → Playback → Audio output device**.
 - the view is revealed only once YouTube Music has finished rendering, instead of flashing unstyled text in the corner
 - own name, own icon and own installation folder
 
-Everything from YTMDesktop stays: companion server, Last.fm, custom CSS, global shortcuts, tray controls and taskbar progress.
+Also on board: companion server, Last.fm scrobbling, custom CSS, global shortcuts, tray controls and taskbar progress.
 
 ## Settings at a glance
 
@@ -120,8 +118,8 @@ The installer animation lives in `src/assets/installer/` and can be regenerated 
   </tr>
 </table>
 
-## License and credits
+## License
 
-This project builds on [YTMDesktop](https://github.com/ytmdesktop/ytmdesktop) and is licensed under **GPL-3.0**, like the original. Thanks to the YTMDesktop team and everyone who contributed there.
+Licensed under **GPL-3.0**, see [LICENSE](LICENSE). Based on [YTMDesktop](https://github.com/ytmdesktop/ytmdesktop).
 
-This project is not affiliated with Google or YouTube.
+Not affiliated with Google or YouTube.

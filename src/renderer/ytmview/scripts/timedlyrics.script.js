@@ -12,7 +12,7 @@
 
   const lyricsNote = document.createElement("p");
   lyricsNote.classList.add("ytmd-lyrics-note");
-  lyricsNote.innerText = "Synced lyrics provided by YTMDesktop";
+  lyricsNote.innerText = "Synced lyrics";
 
   const returnToLiveContainer = document.createElement("div");
   returnToLiveContainer.classList.add("ytmd-lyrics-return-live-container");
