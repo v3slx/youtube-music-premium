@@ -55,6 +55,8 @@ const enableSpeakerFill = ref<boolean>(playback.enableSpeakerFill);
 const progressInTaskbar = ref<boolean>(playback.progressInTaskbar);
 const ratioVolume = ref<boolean>(playback.ratioVolume);
 const timedLyrics = ref<boolean>(playback.timedLyrics);
+const timedLyricsFontSize = ref<number>(playback.timedLyricsFontSize);
+const timedLyricsOffsetMs = ref<number>(playback.timedLyricsOffsetMs);
 const audioOutputDeviceId = ref<string>(playback.audioOutputDeviceId);
 const audioOutputDevices = ref<{ deviceId: string; label: string }[]>([]);
 const audioOutputOptions = computed<Record<string, string>>(() => {
@@ -111,6 +113,8 @@ store.onDidAnyChange(async newState => {
   progressInTaskbar.value = newState.playback.progressInTaskbar;
   ratioVolume.value = newState.playback.ratioVolume;
   timedLyrics.value = newState.playback.timedLyrics;
+  timedLyricsFontSize.value = newState.playback.timedLyricsFontSize;
+  timedLyricsOffsetMs.value = newState.playback.timedLyricsOffsetMs;
   audioOutputDeviceId.value = newState.playback.audioOutputDeviceId;
 
   companionServerEnabled.value = newState.integrations.companionServerEnabled;
@@ -188,6 +192,8 @@ async function settingsChanged() {
   store.set("playback.enableSpeakerFill", enableSpeakerFill.value);
   store.set("playback.ratioVolume", ratioVolume.value);
   store.set("playback.timedLyrics", timedLyrics.value);
+  store.set("playback.timedLyricsFontSize", timedLyricsFontSize.value);
+  store.set("playback.timedLyricsOffsetMs", timedLyricsOffsetMs.value);
   store.set("playback.audioOutputDeviceId", audioOutputDeviceId.value);
 
   store.set("integrations.companionServerEnabled", companionServerEnabled.value);
@@ -393,6 +399,29 @@ window.ytmd.handleUpdateDownloaded(() => {
             type="checkbox"
             name="Synced lyrics"
             description="Replaces the lyrics tab with lyrics that follow along with the song. Only for songs YouTube has synced lyrics for."
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="timedLyrics"
+            v-model="timedLyricsFontSize"
+            type="range"
+            indented
+            max="40"
+            min="14"
+            step="2"
+            name="Lyrics font size"
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="timedLyrics"
+            v-model="timedLyricsOffsetMs"
+            type="range"
+            indented
+            max="3000"
+            min="-3000"
+            step="100"
+            name="Lyrics offset in milliseconds"
+            description="Positive values highlight each line earlier, for when the lyrics run behind the song."
             @change="settingsChanged"
           />
           <YTMDSetting

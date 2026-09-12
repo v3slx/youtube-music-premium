@@ -38,6 +38,8 @@ export type StoreSchema = {
     ratioVolume: boolean;
     audioOutputDeviceId: string;
     timedLyrics: boolean;
+    timedLyricsFontSize: number;
+    timedLyricsOffsetMs: number;
   };
   integrations: {
     companionServerEnabled: boolean;

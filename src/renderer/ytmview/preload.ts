@@ -103,7 +103,7 @@ function createStyleSheet() {
 
       .ytmd-lyrics .ytmd-lyric-line {
         margin-bottom: 16px;
-        font-size: 24px;
+        font-size: var(--ytmd-lyrics-font-size, 24px);
         color: rgba(255, 255, 255, 0.5);
         cursor: pointer;
       }
@@ -219,15 +219,20 @@ async function addTimedLyrics() {
   (await webFrame.executeJavaScript(timedLyricsScript))();
 }
 
-async function setTimedLyricsEnabled(enabled: boolean) {
+async function applyTimedLyricsSettings(playback: StoreSchema["playback"]) {
   (
     await webFrame.executeJavaScript(`
-      (function(enabled) {
+      (function(enabled, offsetMs, fontSize) {
         window.__YTMD_TIMED_LYRICS_ENABLED__ = enabled;
-        if (window.__YTMD_TIMED_LYRICS__) window.__YTMD_TIMED_LYRICS__.setEnabled(enabled);
+        window.__YTMD_TIMED_LYRICS_OFFSET_MS__ = offsetMs;
+        document.documentElement.style.setProperty("--ytmd-lyrics-font-size", fontSize + "px");
+        if (window.__YTMD_TIMED_LYRICS__) {
+          window.__YTMD_TIMED_LYRICS__.setEnabled(enabled);
+          window.__YTMD_TIMED_LYRICS__.setOffsetMs(offsetMs);
+        }
       })
     `)
-  )(enabled);
+  )(playback.timedLyrics, playback.timedLyricsOffsetMs, playback.timedLyricsFontSize);
 }
 
 async function hideChromecastButton() {
@@ -384,8 +389,9 @@ window.addEventListener("load", async () => {
   await hideChromecastButton();
   await hookPlayerApiEvents();
   overrideHistoryButtonDisplay();
-  await applyAudioOutputDevice((await store.get("playback")).audioOutputDeviceId);
-  await setTimedLyricsEnabled((await store.get("playback")).timedLyrics);
+  const playbackSettings = await store.get("playback");
+  await applyAudioOutputDevice(playbackSettings.audioOutputDeviceId);
+  await applyTimedLyricsSettings(playbackSettings);
   await addTimedLyrics();
 
   const integrationScripts: { [integrationName: string]: { [scriptName: string]: string } } = await ipcRenderer.invoke("ytmView:getIntegrationScripts");
@@ -725,7 +731,7 @@ window.addEventListener("load", async () => {
     }
 
     void applyAudioOutputDevice(newState.playback.audioOutputDeviceId);
-    void setTimedLyricsEnabled(newState.playback.timedLyrics);
+    void applyTimedLyricsSettings(newState.playback);
   });
 
   ipcRenderer.on("ytmView:refitPopups", async () => {

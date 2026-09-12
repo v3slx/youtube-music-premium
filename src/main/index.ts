@@ -373,7 +373,9 @@ const store = new Conf<StoreSchema>({
       progressInTaskbar: false,
       ratioVolume: false,
       audioOutputDeviceId: "default",
-      timedLyrics: true
+      timedLyrics: true,
+      timedLyricsFontSize: 24,
+      timedLyricsOffsetMs: 0
     },
     integrations: {
       companionServerEnabled: false,
@@ -450,6 +452,14 @@ const store = new Conf<StoreSchema>({
     ">=2.0.14": store => {
       if (!store.has("playback.timedLyrics")) {
         store.set("playback.timedLyrics", true);
+      }
+    },
+    ">=2.0.15": store => {
+      if (!store.has("playback.timedLyricsFontSize")) {
+        store.set("playback.timedLyricsFontSize", 24);
+      }
+      if (!store.has("playback.timedLyricsOffsetMs")) {
+        store.set("playback.timedLyricsOffsetMs", 0);
       }
     }
   }

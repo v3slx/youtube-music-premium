@@ -170,7 +170,8 @@
   function updateActiveLine(progress) {
     if (!currentLyrics) return;
 
-    const progressMs = progress * 1000;
+    // A positive offset highlights each line earlier, for when the lyrics run behind the song
+    const progressMs = progress * 1000 + (window.__YTMD_TIMED_LYRICS_OFFSET_MS__ ?? 0);
     for (const lineElement of lyricsContainer.children) {
       const start = parseInt(lineElement.getAttribute("data-start-ms"), 10);
       const end = parseInt(lineElement.getAttribute("data-end-ms"), 10);
@@ -227,6 +228,12 @@
       // Allow a fetch for the current song again when the user turns the setting back on
       if (enabled) fetchedBrowseId = "";
       void applyCurrentState();
+    },
+    setOffsetMs: offsetMs => {
+      window.__YTMD_TIMED_LYRICS_OFFSET_MS__ = offsetMs;
+      // Re-evaluate right away instead of waiting for the next progress event
+      const playerApi = window.__YTMD_HOOK__.ytmPlayerBar.playerApi;
+      if (typeof playerApi.getCurrentTime === "function") updateActiveLine(playerApi.getCurrentTime());
     }
   };
 
