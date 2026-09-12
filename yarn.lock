@@ -892,12 +892,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@fastify/type-provider-typebox@npm:^5.2.0":
-  version: 5.2.0
-  resolution: "@fastify/type-provider-typebox@npm:5.2.0"
+"@fastify/type-provider-typebox@npm:^6.1.0":
+  version: 6.1.0
+  resolution: "@fastify/type-provider-typebox@npm:6.1.0"
   peerDependencies:
-    "@sinclair/typebox": ">=0.26 <=0.34"
-  checksum: 10c0/e195df44a0f92a670529e1c6dcf4e948292600bf67a50cc2b5a77eefcbe4e052af65839216cb5d5dee1307bb36a149b71bdf98408c505050f1a4ef4bb09ddc26
+    typebox: ^1.0.13
+  checksum: 10c0/a1411b5292bdbf48fa473650b751861b9f7a2f1b0412f442f2a5f86a1503eb39e6147829832987bf5dba3e389e47704bff92c9a669e6d4398fcb486d92f90e28
   languageName: node
   linkType: hard
 
@@ -9937,7 +9937,7 @@ __metadata:
     "@fastify/cors": "npm:^11.2.0"
     "@fastify/error": "npm:^4.2.0"
     "@fastify/rate-limit": "npm:^10.3.0"
-    "@fastify/type-provider-typebox": "npm:^5.2.0"
+    "@fastify/type-provider-typebox": "npm:^6.1.0"
     "@sinclair/typebox": "npm:^0.34.48"
     "@types/electron-squirrel-startup": "npm:^1.0.2"
     "@types/node": "npm:^22.19.11"
