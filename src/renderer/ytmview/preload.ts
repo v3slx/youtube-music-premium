@@ -17,6 +17,7 @@ import hookPlayerApiEventsScript from "./scripts/hookplayerapievents.script?raw"
 import getPlaylistsScript from "./scripts/getplaylists.script?raw";
 import toggleLikeScript from "./scripts/togglelike.script?raw";
 import toggleDislikeScript from "./scripts/toggledislike.script?raw";
+import timedLyricsScript from "./scripts/timedlyrics.script?raw";
 
 const store = new Store<StoreSchema>();
 
@@ -38,8 +39,21 @@ function createStyleSheet() {
       .ytmd-history-back, .ytmd-history-forward {
         cursor: pointer;
         margin: 0 18px 0 2px;
+        width: 24px;
+        overflow: hidden;
         font-size: 24px;
         color: rgba(255, 255, 255, 0.5);
+      }
+
+      /*
+        With a query (or while open) YTM makes the search box position: absolute, which puts it at the start of the
+        flex nav bar on top of the history arrows. Shift it by the arrows' width (2 x (24px + 20px margin) = 88px) so it
+        stays where it is when closed, and shrink it like the closed box does so it doesn't run into the right icons.
+        (The 100px is the nav bar's left padding, the mobile layout centers the box on its own.)
+      */
+      ytmusic-search-box:not([is-mobile-view])[has-query], ytmusic-search-box:not([is-mobile-view])[opened] {
+        translate: 88px 0;
+        max-width: min(480px, calc(100% - 100px - 88px)) !important;
       }
 
       .ytmd-history-back.pivotbar, .ytmd-history-forward.pivotbar {
@@ -81,6 +95,47 @@ function createStyleSheet() {
 
       .ytmd-player-bar-control.sleep-timer-button.active {
         color: #FFFFFF;
+      }
+
+      .ytmd-lyrics {
+        margin-top: 16px;
+      }
+
+      .ytmd-lyrics .ytmd-lyric-line {
+        margin-bottom: 16px;
+        font-size: 24px;
+        color: rgba(255, 255, 255, 0.5);
+        cursor: pointer;
+      }
+
+      .ytmd-lyrics .ytmd-lyric-line.active {
+        color: rgba(255, 255, 255, 1);
+      }
+
+      .ytmd-lyrics .ytmd-lyric-line:last-child {
+        margin-bottom: 24px;
+      }
+
+      .ytmd-lyrics-source, .ytmd-lyrics-note {
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      .ytmd-lyrics-note {
+        margin-bottom: 128px;
+      }
+
+      /* Keeps the "Sync to video time" button positioned above the lyrics */
+      .ytmusic-tab-renderer[page-type='MUSIC_PAGE_TYPE_TRACK_LYRICS'] > #contents {
+        position: relative;
+      }
+
+      .ytmd-lyrics-return-live-container {
+        position: sticky;
+        bottom: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
       }
     `)
   );
@@ -160,6 +215,21 @@ async function createAdditionalPlayerBarControls() {
   (await webFrame.executeJavaScript(playerBarControlsScript))();
 }
 
+async function addTimedLyrics() {
+  (await webFrame.executeJavaScript(timedLyricsScript))();
+}
+
+async function setTimedLyricsEnabled(enabled: boolean) {
+  (
+    await webFrame.executeJavaScript(`
+      (function(enabled) {
+        window.__YTMD_TIMED_LYRICS_ENABLED__ = enabled;
+        if (window.__YTMD_TIMED_LYRICS__) window.__YTMD_TIMED_LYRICS__.setEnabled(enabled);
+      })
+    `)
+  )(enabled);
+}
+
 async function hideChromecastButton() {
   (
     await webFrame.executeJavaScript(`
@@ -177,6 +247,41 @@ async function hookPlayerApiEvents() {
 function overrideHistoryButtonDisplay() {
   // @ts-expect-error Style is reported as readonly but this still works
   document.querySelector<HTMLElement>("#history-link .history-button").style = "display: inline-block !important;";
+}
+
+async function applyAudioOutputDevice(deviceId: string) {
+  const escapedDeviceId = JSON.stringify(deviceId);
+  await webFrame.executeJavaScript(`
+    (async () => {
+      const sinkId = ${escapedDeviceId};
+      const output = window.__YTMD_AUDIO_OUTPUT__ || {};
+      output.sinkId = sinkId;
+      output.apply = async (media) => {
+        if (typeof media.setSinkId !== "function") return;
+        try {
+          await media.setSinkId(output.sinkId);
+        } catch (error) {
+          console.warn("YTMD could not switch the audio output device", error);
+        }
+      };
+
+      if (!output.observer) {
+        output.observer = new MutationObserver(records => {
+          for (const record of records) {
+            for (const node of record.addedNodes) {
+              if (!(node instanceof Element)) continue;
+              if (node.matches("audio, video")) output.apply(node);
+              node.querySelectorAll("audio, video").forEach(media => output.apply(media));
+            }
+          }
+        });
+        output.observer.observe(document.documentElement, { childList: true, subtree: true });
+      }
+
+      window.__YTMD_AUDIO_OUTPUT__ = output;
+      await Promise.all([...document.querySelectorAll("audio, video")].map(media => output.apply(media)));
+    })()
+  `);
 }
 
 function getYTMTextRun(runs: { text: string }[]) {
@@ -279,6 +384,9 @@ window.addEventListener("load", async () => {
   await hideChromecastButton();
   await hookPlayerApiEvents();
   overrideHistoryButtonDisplay();
+  await applyAudioOutputDevice((await store.get("playback")).audioOutputDeviceId);
+  await setTimedLyricsEnabled((await store.get("playback")).timedLyrics);
+  await addTimedLyrics();
 
   const integrationScripts: { [integrationName: string]: { [scriptName: string]: string } } = await ipcRenderer.invoke("ytmView:getIntegrationScripts");
 
@@ -615,6 +723,9 @@ window.addEventListener("load", async () => {
         volumeSlider.classList.remove("ytmd-persist-volume-slider");
       }
     }
+
+    void applyAudioOutputDevice(newState.playback.audioOutputDeviceId);
+    void setTimedLyricsEnabled(newState.playback.timedLyrics);
   });
 
   ipcRenderer.on("ytmView:refitPopups", async () => {

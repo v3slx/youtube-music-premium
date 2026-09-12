@@ -22,14 +22,16 @@ import Conf from "conf";
 import log from "electron-log";
 import path from "path";
 import fs from "fs/promises";
+import { existsSync } from "fs";
 import electronSquirrelStartup from "electron-squirrel-startup";
 
 import MemoryStore from "./memory-store";
 import playerStateStore, { PlayerState, VideoState } from "./player-state-store";
-import { MemoryStoreSchema, StoreSchema, TrayIconStyle } from "../shared/store/schema";
+import { MemoryStoreSchema, StoreSchema, ThemePreset, TrayIconStyle } from "../shared/store/schema";
 
 import CompanionServer from "./integrations/companion-server";
 import CustomCSS from "./integrations/custom-css";
+import BuiltInTheme from "./integrations/built-in-theme";
 import DiscordPresence from "./integrations/discord-presence";
 import LastFM from "./integrations/last-fm";
 import NowPlayingNotifications from "./integrations/notifications";
@@ -113,7 +115,7 @@ log.errorHandler.startCatching({
       `${error.stack}`;
 
     if (!app.isReady()) {
-      dialog.showErrorBox(`YouTube Music Desktop App Crashed`, `Application crashed before ready\n\n${dialogMessage}`);
+      dialog.showErrorBox(`${app.getName()} Crashed`, `Application crashed before ready\n\n${dialogMessage}`);
     } else {
       const options = ["Copy to Clipboard and Exit", "Exit"];
       if (!app.isPackaged) {
@@ -122,7 +124,7 @@ log.errorHandler.startCatching({
 
       result = dialog.showMessageBoxSync({
         title: "Error",
-        message: "YouTube Music Desktop App Crashed",
+        message: `${app.getName()} Crashed`,
         detail: dialogMessage,
         type: "error",
         buttons: options
@@ -130,7 +132,7 @@ log.errorHandler.startCatching({
 
       // Copy to Clipboard
       if (result === 0 || result === 2) {
-        clipboard.writeText(`YouTube Music Desktop App Crashed\n\n${dialogMessage}`);
+        clipboard.writeText(`${app.getName()} Crashed\n\n${dialogMessage}`);
       }
     }
 
@@ -151,18 +153,25 @@ if (electronSquirrelStartup) {
   app.quit();
 }
 
+// Electron sets the AppUserModelID of Squirrel installs automatically, NSIS installs (electron-builder) put
+// this ID on their shortcuts and need it set explicitly for taskbar pinning and notifications to match
+if (process.platform === "win32" && app.isPackaged && !existsSync(path.resolve(path.dirname(process.execPath), "..", "Update.exe"))) {
+  app.setAppUserModelId("local.youtube-music-premium");
+}
+
 log.info("Application launched");
 
 // Enforce sandbox on all renderers
 app.enableSandbox();
 
 // appMenu allows for some basic windows management, editMenu allow for copy and paste shortcuts on MacOS
-const template: MenuItemConstructorOptions[] = [{ role: "appMenu", label: "YouTube Music Desktop App" }, { role: "editMenu" }];
+const template: MenuItemConstructorOptions[] = [{ role: "appMenu", label: app.getName() }, { role: "editMenu" }];
 const builtMenu = isDarwin ? Menu.buildFromTemplate(template) : null; // null for performance https://www.electronjs.org/docs/latest/tutorial/performance#8-call-menusetapplicationmenunull-when-you-do-not-need-a-default-menu
 Menu.setApplicationMenu(builtMenu);
 
 const companionServer = new CompanionServer();
 const customCss = new CustomCSS();
+const builtInTheme = new BuiltInTheme();
 const discordPresence = new DiscordPresence();
 const lastFMScrobbler = new LastFM();
 const nowPlayingNotifications = new NowPlayingNotifications();
@@ -261,9 +270,9 @@ memoryStore.onStateChanged((newState, oldState) => {
 log.info("Created memory store");
 
 function shouldDisableUpdates() {
-  // macOS can't have auto updates without a code signature
-  // linux is not supported on the update server https://github.com/ytmdesktop/ytmdesktop/issues/1247 (hanging issue resolved)
-  if (process.platform !== "win32") return true;
+  // This custom build must never update from the official YTMDesktop release feed, that would replace it with
+  // the official app. (Upstream also disables updates on macOS/Linux as they are unsupported there.)
+  return true;
 }
 
 // Configure the autoupdater
@@ -353,6 +362,7 @@ const store = new Conf<StoreSchema>({
       alwaysShowVolumeSlider: false,
       customCSSEnabled: false,
       customCSSPath: null,
+      theme: ThemePreset.Default,
       zoom: 100,
       trayIconStyle: TrayIconStyle.Auto
     },
@@ -361,13 +371,16 @@ const store = new Conf<StoreSchema>({
       continueWhereYouLeftOffPaused: true,
       enableSpeakerFill: false,
       progressInTaskbar: false,
-      ratioVolume: false
+      ratioVolume: false,
+      audioOutputDeviceId: "default",
+      timedLyrics: true
     },
     integrations: {
       companionServerEnabled: false,
       companionServerAuthTokens: null,
       companionServerCORSWildcardEnabled: false,
       discordPresenceEnabled: false,
+      discordPresenceClientId: "1143202598460076053",
       lastFMEnabled: false
     },
     shortcuts: {
@@ -422,6 +435,22 @@ const store = new Conf<StoreSchema>({
       if (!store.has("appearance.trayIconStyle")) {
         store.set("appearance.trayIconStyle", 0);
       }
+    },
+    ">=2.0.13": store => {
+      if (!store.has("appearance.theme")) {
+        store.set("appearance.theme", ThemePreset.Default);
+      }
+      if (!store.has("playback.audioOutputDeviceId")) {
+        store.set("playback.audioOutputDeviceId", "default");
+      }
+      if (!store.has("integrations.discordPresenceClientId")) {
+        store.set("integrations.discordPresenceClientId", "1143202598460076053");
+      }
+    },
+    ">=2.0.14": store => {
+      if (!store.has("playback.timedLyrics")) {
+        store.set("playback.timedLyrics", true);
+      }
     }
   }
 });
@@ -467,6 +496,11 @@ store.onDidAnyChange(async (newState, oldState) => {
   } else if (!newState.appearance.customCSSEnabled && oldState.appearance.customCSSEnabled) {
     customCss.disable();
     log.info("Integration disabled: Custom CSS");
+  }
+  if (newState.appearance.theme !== oldState.appearance.theme) {
+    builtInTheme.provide(ytmView);
+    builtInTheme.setTheme(newState.appearance.theme);
+    log.info("Appearance update: Theme preset");
   }
   if (oldState.appearance.trayIconStyle !== newState.appearance.trayIconStyle) setTrayIcon();
 
@@ -527,7 +561,7 @@ store.onDidAnyChange(async (newState, oldState) => {
   }
 
   if (newState.integrations.discordPresenceEnabled) {
-    discordPresence.provide(memoryStore);
+    discordPresence.provide(store, memoryStore);
   }
   if (newState.integrations.discordPresenceEnabled && !oldState.integrations.discordPresenceEnabled) {
     discordPresence.enable();
@@ -535,6 +569,11 @@ store.onDidAnyChange(async (newState, oldState) => {
   } else if (!newState.integrations.discordPresenceEnabled && oldState.integrations.discordPresenceEnabled) {
     discordPresence.disable();
     log.info("Integration disabled: Discord presence");
+  } else if (newState.integrations.discordPresenceEnabled && newState.integrations.discordPresenceClientId !== oldState.integrations.discordPresenceClientId) {
+    discordPresence.disable();
+    discordPresence.provide(store, memoryStore);
+    discordPresence.enable();
+    log.info("Integration restarted: Discord presence client ID changed");
   }
 
   if (newState.integrations.lastFMEnabled) {
@@ -965,7 +1004,11 @@ const createOrShowSettingsWindow = (): void => {
   });
 
   settingsWindow.webContents.setWindowOpenHandler(details => {
-    if (details.url === "https://github.com/ytmdesktop/ytmdesktop" || details.url === "https://ytmdesktop.github.io/") {
+    if (
+      details.url === "https://github.com/ytmdesktop/ytmdesktop" ||
+      details.url === "https://ytmdesktop.github.io/" ||
+      details.url === "https://discord.com/developers/applications"
+    ) {
       shell.openExternal(details.url);
     }
 
@@ -1032,6 +1075,7 @@ const createYTMView = (): void => {
   });
   companionServer.provide(store, memoryStore, ytmView);
   customCss.provide(store, ytmView);
+  builtInTheme.provide(ytmView);
   ratioVolume.provide(ytmView);
 
   // Attach events to ytm view
@@ -1083,14 +1127,14 @@ const createYTMView = (): void => {
   });
   ytmView.webContents.on("page-title-updated", (_event, title) => {
     if (mainWindow) {
-      mainWindow.setTitle(`${title} | YouTube Music Desktop App`);
+      mainWindow.setTitle(`${title} | ${app.getName()}`);
     }
   });
   ytmView.webContents.on("context-menu", (_event, params) => {
     if (store.get("developer.enableDevTools")) {
       Menu.buildFromTemplate([
         {
-          label: "YouTube Music Desktop",
+          label: app.getName(),
           type: "normal",
           enabled: false
         },
@@ -1720,6 +1764,34 @@ app.on("ready", async () => {
     store.reset(key);
   });
 
+  ipcMain.handle("audioOutput:getDevices", async event => {
+    if (!settingsWindow || event.sender !== settingsWindow.webContents || !ytmView || ytmView.webContents.isDestroyed()) return [];
+
+    let devices: unknown;
+    try {
+      devices = await ytmView.webContents.executeJavaScript(`
+        navigator.mediaDevices
+          .enumerateDevices()
+          .then(devices => devices.filter(device => device.kind === "audiooutput").map(({ deviceId, label }) => ({ deviceId, label })))
+      `);
+    } catch (error) {
+      // YTM may be on an error page (e.g. offline) where mediaDevices is unavailable
+      log.warn("Failed to enumerate audio output devices", error);
+      return [];
+    }
+
+    if (!Array.isArray(devices)) return [];
+    return devices.filter(
+      (device): device is { deviceId: string; label: string } =>
+        typeof device === "object" &&
+        device !== null &&
+        "deviceId" in device &&
+        "label" in device &&
+        typeof device.deviceId === "string" &&
+        typeof device.label === "string"
+    );
+  });
+
   // Handle safeStorage ipc
   ipcMain.handle("safeStorage:decryptString", (event, value: string) => {
     if (!memoryStore.get("safeStorageAvailable")) throw new Error("safeStorage is unavailable");
@@ -1783,13 +1855,17 @@ app.on("ready", async () => {
       if (permission === "fullscreen") {
         return true;
       }
+      // Required to list and switch audio output devices (enumerateDevices / setSinkId)
+      if (permission === "speaker-selection") {
+        return true;
+      }
     }
 
     return false;
   });
   session.fromPartition(app.isPackaged ? "persist:ytmview" : "persist:ytmview-dev").setPermissionRequestHandler((webContents, permission, callback) => {
     if (webContents == ytmView.webContents) {
-      if (permission === "fullscreen") {
+      if (permission === "fullscreen" || permission === "speaker-selection") {
         return callback(true);
       }
     }
@@ -1806,7 +1882,7 @@ app.on("ready", async () => {
   tray = new Tray(getTrayIconPath());
   trayContextMenu = Menu.buildFromTemplate([
     {
-      label: "YouTube Music Desktop",
+      label: app.getName(),
       type: "normal",
       enabled: false
     },
@@ -1858,7 +1934,7 @@ app.on("ready", async () => {
       }
     }
   ]);
-  tray.setToolTip("YouTube Music Desktop");
+  tray.setToolTip(app.getName());
   tray.setContextMenu(trayContextMenu);
   tray.on("click", () => {
     if (mainWindow) {
@@ -1925,6 +2001,10 @@ app.on("ready", async () => {
     log.info("Integration enabled: Custom CSS");
   }
 
+  // Built-in theme presets are independent from custom CSS and can be combined with it.
+  builtInTheme.provide(ytmView);
+  builtInTheme.setTheme(store.get("appearance").theme);
+
   // RatioVolume
   if (store.get("playback").ratioVolume) {
     ratioVolume.provide(ytmView);
@@ -1941,7 +2021,7 @@ app.on("ready", async () => {
 
   // DiscordPresence
   if (store.get("integrations").discordPresenceEnabled) {
-    discordPresence.provide(memoryStore);
+    discordPresence.provide(store, memoryStore);
     discordPresence.enable();
     log.info("Integration enabled: Discord presence");
   }

@@ -20,6 +20,7 @@ declare global {
       restartApplication(): void;
       restartApplicationForUpdate(): void;
       getTrueFilePath(file: File): string;
+      getAudioOutputDevices(): Promise<{ deviceId: string; label: string }[]>;
 
       // Companion Authorization specific
       sendResult(authorized: boolean);

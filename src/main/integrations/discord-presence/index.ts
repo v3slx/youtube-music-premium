@@ -1,12 +1,26 @@
 import playerStateStore, { PlayerState, Thumbnail, VideoDetails, VideoState } from "../../player-state-store";
 import IIntegration from "../integration";
 import MemoryStore from "../../memory-store";
-import { MemoryStoreSchema } from "~shared/store/schema";
+import { MemoryStoreSchema, StoreSchema } from "~shared/store/schema";
 import DiscordClient from "./minimal-discord-client";
 import log from "electron-log";
 import { DiscordActivityType } from "./minimal-discord-client/types";
+import Conf from "conf";
 
-const DISCORD_CLIENT_ID = "1143202598460076053";
+const DEFAULT_DISCORD_CLIENT_ID = "1143202598460076053";
+// Custom Discord applications don't have the YTMD art assets uploaded, so they reference the public
+// assets of the default application through Discord's CDN instead of by asset key
+const DEFAULT_APPLICATION_ASSET_IDS: Record<string, string> = {
+  "ytmd-logo": "1143211263132958840",
+  "play-border": "1143207310794182666",
+  "pause-border": "1143207309460377631"
+};
+
+function resolveClientId(configuredClientId: string | undefined): string {
+  const clientId = (configuredClientId ?? "").trim();
+  // Discord application IDs are snowflakes, anything else would make every connection attempt fail
+  return /^\d{17,20}$/.test(clientId) ? clientId : DEFAULT_DISCORD_CLIENT_ID;
+}
 
 function getHighestResThumbnail(thumbnails: Thumbnail[]): string {
   return thumbnails.reduce(
@@ -50,9 +64,11 @@ function stringLimit(str: string, limit: number, minimum: number) {
 }
 
 export default class DiscordPresence implements IIntegration {
+  private store: Conf<StoreSchema>;
   private memoryStore: MemoryStore<MemoryStoreSchema>;
 
   private discordClient: DiscordClient = null;
+  private usesDefaultApplication = true;
   private enabled = false;
   private ready = false;
   private activityDebounceTimeout: NodeJS.Timeout | null = null;
@@ -66,6 +82,11 @@ export default class DiscordPresence implements IIntegration {
 
   private connectionRetries: number = 0;
 
+  private getImage(assetKey: string): string {
+    if (this.usesDefaultApplication) return assetKey;
+    return `https://cdn.discordapp.com/app-assets/${DEFAULT_DISCORD_CLIENT_ID}/${DEFAULT_APPLICATION_ASSET_IDS[assetKey]}.png`;
+  }
+
   private UpdateActivity() {
     if (this.activityDebounceTimeout) return;
     this.activityDebounceTimeout = setTimeout(() => {
@@ -75,6 +96,8 @@ export default class DiscordPresence implements IIntegration {
       }
       const { title, author, album, id, thumbnails, durationSeconds, channelId, albumId } = this.videoDetails;
       const thumbnail = getHighestResThumbnail(thumbnails);
+      // Discord shows large_text as an extra line below the artist, singles would show their title twice
+      const showAlbum = album && album.trim().toLowerCase() !== title.trim().toLowerCase();
       this.discordClient.setActivity({
         type: DiscordActivityType.Listening,
         status_display_type: 1,
@@ -87,14 +110,20 @@ export default class DiscordPresence implements IIntegration {
           end: this.videoState === VideoState.Playing ? Date.now() + (durationSeconds - this.progress) * 1000 : undefined
         },
         assets: {
-          large_image: (thumbnail?.length ?? 0) <= 256 ? thumbnail : "ytmd-logo",
-          large_text: album ? stringLimit(album, 128, 2) : undefined,
+          large_image: (thumbnail?.length ?? 0) <= 256 ? thumbnail : this.getImage("ytmd-logo"),
+          large_text: showAlbum ? stringLimit(album, 128, 2) : undefined,
           large_url: albumId ? `https://music.youtube.com/browse/${albumId}` : undefined,
-          small_image: getSmallImageKey(this.videoState),
+          small_image: this.getImage(getSmallImageKey(this.videoState)),
           small_text: getSmallImageText(this.videoState)
         },
         instance: false,
+        // Discord allows at most 2 buttons with labels up to 32 characters
         buttons: [
+          {
+            // Works for everyone viewing the status, the YTMDesktop button only works if they have YTMDesktop installed
+            label: "Auf YouTube Music anhören",
+            url: `https://music.youtube.com/watch?v=${id}`
+          },
           {
             label: "Play on YTMDesktop",
             url: `ytmd://play/${id}`
@@ -136,7 +165,8 @@ export default class DiscordPresence implements IIntegration {
     }, 30 * 1000);
   }
 
-  public provide(memoryStore: MemoryStore<MemoryStoreSchema>): void {
+  public provide(store: Conf<StoreSchema>, memoryStore: MemoryStore<MemoryStoreSchema>): void {
+    this.store = store;
     this.memoryStore = memoryStore;
   }
 
@@ -160,7 +190,9 @@ export default class DiscordPresence implements IIntegration {
   public enable(): void {
     this.enabled = true;
     if (this.discordClient) return;
-    this.discordClient = new DiscordClient(DISCORD_CLIENT_ID);
+    const clientId = resolveClientId(this.store.get("integrations.discordPresenceClientId") as string | undefined);
+    this.usesDefaultApplication = clientId === DEFAULT_DISCORD_CLIENT_ID;
+    this.discordClient = new DiscordClient(clientId);
 
     this.discordClient.on("connect", () => {
       this.ready = true;

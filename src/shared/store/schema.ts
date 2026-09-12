@@ -4,6 +4,13 @@ export enum TrayIconStyle {
   Black = 2
 }
 
+export enum ThemePreset {
+  Default = 0,
+  Midnight = 1,
+  Ocean = 2,
+  Forest = 3
+}
+
 export type StoreSchema = {
   metadata: {
     version: 1;
@@ -19,6 +26,7 @@ export type StoreSchema = {
     alwaysShowVolumeSlider: boolean;
     customCSSEnabled: boolean;
     customCSSPath: string | null;
+    theme: ThemePreset;
     zoom: number;
     trayIconStyle: TrayIconStyle;
   };
@@ -28,12 +36,15 @@ export type StoreSchema = {
     enableSpeakerFill: boolean;
     progressInTaskbar: boolean;
     ratioVolume: boolean;
+    audioOutputDeviceId: string;
+    timedLyrics: boolean;
   };
   integrations: {
     companionServerEnabled: boolean;
     companionServerAuthTokens: string | null; // array[object] | Encrypted for security
     companionServerCORSWildcardEnabled: boolean;
     discordPresenceEnabled: boolean;
+    discordPresenceClientId: string;
     lastFMEnabled: boolean;
   };
   shortcuts: {

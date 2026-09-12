@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import KeybindInput from "../../components/KeybindInput.vue";
 import YTMDSetting from "../../components/YTMDSetting.vue";
-import { StoreSchema, TrayIconStyle } from "~shared/store/schema";
+import { StoreSchema, ThemePreset, TrayIconStyle } from "~shared/store/schema";
 import { AuthToken } from "~shared/integrations/companion-server/types";
 import logo from "~assets/icons/ytmd.png";
 
@@ -45,6 +45,7 @@ const startMinimized = ref<boolean>(general.startMinimized);
 const alwaysShowVolumeSlider = ref<boolean>(appearance.alwaysShowVolumeSlider);
 const customCSSEnabled = ref<boolean>(appearance.customCSSEnabled);
 const customCSSPath = ref<string>(appearance.customCSSPath);
+const theme = ref<ThemePreset>(appearance.theme);
 const zoom = ref<number>(appearance.zoom);
 const trayIconStyle = ref<number>(appearance.trayIconStyle);
 
@@ -53,6 +54,22 @@ const continueWhereYouLeftOffPaused = ref<boolean>(playback.continueWhereYouLeft
 const enableSpeakerFill = ref<boolean>(playback.enableSpeakerFill);
 const progressInTaskbar = ref<boolean>(playback.progressInTaskbar);
 const ratioVolume = ref<boolean>(playback.ratioVolume);
+const timedLyrics = ref<boolean>(playback.timedLyrics);
+const audioOutputDeviceId = ref<string>(playback.audioOutputDeviceId);
+const audioOutputDevices = ref<{ deviceId: string; label: string }[]>([]);
+const audioOutputOptions = computed<Record<string, string>>(() => {
+  const options: Record<string, string> = {
+    default: "System default",
+    ...Object.fromEntries(
+      audioOutputDevices.value
+        .filter(device => device.deviceId && device.deviceId !== "default")
+        .map((device, index) => [device.deviceId, device.label || `Audio output ${index + 1}`])
+    )
+  };
+  // Keep the saved device selectable/visible while the list loads or when the device is unplugged
+  if (!(audioOutputDeviceId.value in options)) options[audioOutputDeviceId.value] = "Saved device (not connected)";
+  return options;
+});
 
 const companionServerEnabled = ref<boolean>(integrations.companionServerEnabled);
 const companionServerAuthTokens = ref<AuthToken[]>(
@@ -60,6 +77,7 @@ const companionServerAuthTokens = ref<AuthToken[]>(
 );
 const companionServerCORSWildcardEnabled = ref<boolean>(integrations.companionServerCORSWildcardEnabled);
 const discordPresenceEnabled = ref<boolean>(integrations.discordPresenceEnabled);
+const discordPresenceClientId = ref<string>(integrations.discordPresenceClientId);
 const lastFMEnabled = ref<boolean>(integrations.lastFMEnabled);
 
 const shortcutPlayPause = ref<string>(shortcuts.playPause);
@@ -83,6 +101,7 @@ store.onDidAnyChange(async newState => {
   alwaysShowVolumeSlider.value = newState.appearance.alwaysShowVolumeSlider;
   customCSSEnabled.value = newState.appearance.customCSSEnabled;
   customCSSPath.value = newState.appearance.customCSSPath;
+  theme.value = newState.appearance.theme;
   zoom.value = newState.appearance.zoom;
   trayIconStyle.value = newState.appearance.trayIconStyle;
 
@@ -91,6 +110,8 @@ store.onDidAnyChange(async newState => {
   enableSpeakerFill.value = newState.playback.enableSpeakerFill;
   progressInTaskbar.value = newState.playback.progressInTaskbar;
   ratioVolume.value = newState.playback.ratioVolume;
+  timedLyrics.value = newState.playback.timedLyrics;
+  audioOutputDeviceId.value = newState.playback.audioOutputDeviceId;
 
   companionServerEnabled.value = newState.integrations.companionServerEnabled;
   companionServerAuthTokens.value = safeStorageAvailable.value
@@ -98,6 +119,7 @@ store.onDidAnyChange(async newState => {
     : [];
   companionServerCORSWildcardEnabled.value = newState.integrations.companionServerCORSWildcardEnabled;
   discordPresenceEnabled.value = newState.integrations.discordPresenceEnabled;
+  discordPresenceClientId.value = newState.integrations.discordPresenceClientId;
   lastFMEnabled.value = newState.integrations.lastFMEnabled;
   lastFMSessionKey.value = newState.lastfm.sessionKey;
   scrobblePercent.value = newState.lastfm.scrobblePercent;
@@ -156,6 +178,7 @@ async function settingsChanged() {
 
   store.set("appearance.alwaysShowVolumeSlider", alwaysShowVolumeSlider.value);
   store.set("appearance.customCSSEnabled", customCSSEnabled.value);
+  store.set("appearance.theme", theme.value);
   store.set("appearance.zoom", zoom.value);
   store.set("appearance.trayIconStyle", trayIconStyle.value);
 
@@ -164,10 +187,13 @@ async function settingsChanged() {
   store.set("playback.progressInTaskbar", progressInTaskbar.value);
   store.set("playback.enableSpeakerFill", enableSpeakerFill.value);
   store.set("playback.ratioVolume", ratioVolume.value);
+  store.set("playback.timedLyrics", timedLyrics.value);
+  store.set("playback.audioOutputDeviceId", audioOutputDeviceId.value);
 
   store.set("integrations.companionServerEnabled", companionServerEnabled.value);
   store.set("integrations.companionServerCORSWildcardEnabled", companionServerCORSWildcardEnabled.value);
   store.set("integrations.discordPresenceEnabled", discordPresenceEnabled.value);
+  store.set("integrations.discordPresenceClientId", discordPresenceClientId.value.trim());
   store.set("integrations.lastFMEnabled", lastFMEnabled.value);
   store.set("lastfm.scrobblePercent", scrobblePercent.value);
 
@@ -204,6 +230,17 @@ async function restartDiscordPresence() {
   discordPresenceEnabled.value = true;
   await settingsChanged();
 }
+
+async function refreshAudioOutputDevices() {
+  try {
+    audioOutputDevices.value = await window.ytmd.getAudioOutputDevices();
+  } catch {
+    audioOutputDevices.value = [];
+  }
+}
+
+// Not awaited: the device list comes from the YTM view, which blocks until YTM has finished loading
+void refreshAudioOutputDevices();
 
 async function deleteCompanionAuthToken(appId: string) {
   const index = companionServerAuthTokens.value.findIndex(token => token.appId === appId);
@@ -314,6 +351,19 @@ window.ytmd.handleUpdateDownloaded(() => {
             @file-change="settingChangedFile"
             @clear="removeCustomCSSPath"
           />
+          <YTMDSetting
+            v-model="theme"
+            :options-map="{
+              [ThemePreset.Default]: 'YouTube Music default',
+              [ThemePreset.Midnight]: 'Midnight',
+              [ThemePreset.Ocean]: 'Ocean',
+              [ThemePreset.Forest]: 'Forest'
+            }"
+            type="select"
+            name="Theme"
+            description="Built-in presets can be combined with Custom CSS."
+            @change="settingsChanged"
+          />
           <YTMDSetting v-model="zoom" type="range" max="300" min="30" step="10" name="Zoom" @change="settingsChanged" />
           <YTMDSetting
             v-if="isLinux"
@@ -338,6 +388,22 @@ window.ytmd.handleUpdateDownloaded(() => {
           <YTMDSetting v-model="progressInTaskbar" type="checkbox" name="Show track progress on taskbar" @change="settingsChanged" />
           <YTMDSetting v-model="enableSpeakerFill" type="checkbox" restart-required name="Enable speaker fill" @change="settingChangedRequiresRestart" />
           <YTMDSetting v-model="ratioVolume" type="checkbox" name="Ratio volume" @change="settingsChanged" />
+          <YTMDSetting
+            v-model="timedLyrics"
+            type="checkbox"
+            name="Synced lyrics"
+            description="Replaces the lyrics tab with lyrics that follow along with the song. Only for songs YouTube has synced lyrics for."
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-model="audioOutputDeviceId"
+            :options-map="audioOutputOptions"
+            type="select"
+            name="Audio output device"
+            description="Routes YouTube Music audio to the selected device."
+            @change="settingsChanged"
+          />
+          <div class="audio-output-actions"><button @click="refreshAudioOutputDevices">Refresh devices</button></div>
         </div>
 
         <div v-if="currentTab === 4" class="integrations-tab">
@@ -403,6 +469,23 @@ window.ytmd.handleUpdateDownloaded(() => {
             </div>
           </YTMDSetting>
           <YTMDSetting v-model="discordPresenceEnabled" type="checkbox" name="Discord rich presence" @change="settingsChanged" />
+          <YTMDSetting
+            v-if="discordPresenceEnabled"
+            type="custom"
+            flex-column
+            indented
+            name="Discord application ID"
+            description="Discord always shows the name of the Discord application ('Listening to <name>'). To show 'YouTube Music Premium', create an application with exactly that name in the Discord Developer Portal and paste its Application ID here. Leave empty to use the default."
+          >
+            <input
+              v-model="discordPresenceClientId"
+              class="discord-client-id"
+              inputmode="numeric"
+              placeholder="Default (YouTube Music)"
+              @change="settingsChanged"
+            />
+            <a class="discord-portal-link" href="https://discord.com/developers/applications" target="_blank">Open Discord Developer Portal</a>
+          </YTMDSetting>
           <div v-if="discordPresenceEnabled && discordPresenceConnectionFailed" class="setting indented">
             <p class="discord-failure">Discord connection could not be established after 30 attempts</p>
             <button @click="restartDiscordPresence">Retry</button>
@@ -521,8 +604,8 @@ window.ytmd.handleUpdateDownloaded(() => {
 
         <div v-if="currentTab === 99" class="about-tab">
           <img class="icon" :src="logo" />
-          <h2 class="app-name">YouTube Music Desktop App</h2>
-          <p class="made-by">Made by YTMDesktop Team</p>
+          <h2 class="app-name">YouTube Music Premium</h2>
+          <p class="made-by">Made by Skorbjen, based on YouTube Music Desktop App by YTMDesktop Team</p>
           <template v-if="!autoUpdaterDisabled">
             <button
               v-if="!updateDownloaded"
@@ -844,6 +927,28 @@ window.ytmd.handleUpdateDownloaded(() => {
 .discord-failure {
   margin: 0;
   color: #969696;
+}
+
+.audio-output-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.discord-client-id {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding: 8px;
+  color: #ffffff;
+  background-color: #212121;
+  border: 1px solid #424242;
+  border-radius: 4px;
+}
+
+.discord-portal-link {
+  margin-top: 6px;
+  color: #bbbbbb;
 }
 
 button {
