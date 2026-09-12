@@ -19,6 +19,8 @@ for (let i = 0; i < process.argv.length; i++) {
 const config: ForgeConfig = {
   packagerConfig: {
     executableName: "youtube-music-premium",
+    // Without this the executable keeps Electron's default copyright
+    appCopyright: "Copyright © 2026 Skorbjen",
     icon: "./src/assets/icons/ytmd",
     extraResource: [
       "./src/assets/icons/tray.ico",
