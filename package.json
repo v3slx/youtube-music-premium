@@ -1,14 +1,16 @@
 {
-  "name": "youtube-music-desktop-app",
-  "productName": "YouTube Music Desktop App",
-  "version": "2.0.12",
-  "description": "YouTube Music Desktop App",
+  "name": "youtube-music-premium",
+  "productName": "YouTube Music Premium",
+  "version": "2.0.14",
+  "description": "YouTube Music Premium (custom build of YouTube Music Desktop App)",
   "main": ".vite/main/index.js",
   "private": true,
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
+    "make:nsis": "electron-builder --win nsis --prepackaged \"out/YouTube Music Premium-win32-x64\"",
+    "make:all": "electron-forge make && electron-builder --win nsis --prepackaged \"out/YouTube Music Premium-win32-x64\"",
     "publish:dry": "electron-forge publish --dry-run",
     "publish:fromdry": "electron-forge publish --from-dry-run",
     "publish": "electron-forge publish",
@@ -20,8 +22,7 @@
   },
   "keywords": [],
   "author": {
-    "name": "NovusTheory",
-    "email": "novustheory@gmail.com"
+    "name": "Skorbjen"
   },
   "license": "GPL-3.0-only",
   "devDependencies": {
@@ -41,6 +42,7 @@
     "@typescript-eslint/parser": "^8.55.0",
     "@vitejs/plugin-vue": "^5.2.4",
     "electron": "^44.3.0",
+    "electron-builder": "26",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.2",
     "eslint-import-resolver-typescript": "^3.10.1",

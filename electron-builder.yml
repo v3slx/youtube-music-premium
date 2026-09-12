@@ -1,0 +1,42 @@
+# NSIS setup wizard for Windows. Electron Forge packages the app, electron-builder only wraps the
+# prepackaged output in an installer: yarn make:nsis (after yarn make or yarn package)
+appId: local.youtube-music-premium
+productName: YouTube Music Premium
+publish: null
+
+directories:
+  output: out/make/nsis
+  buildResources: installer
+
+win:
+  target: nsis
+  icon: src/assets/icons/ytmd.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  # Created through a checkbox on the finish page instead (installer/installer.nsh)
+  createDesktopShortcut: false
+  createStartMenuShortcut: true
+  shortcutName: YouTube Music Premium
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+  differentialPackage: false
+  multiLanguageInstaller: false
+  installerLanguages:
+    - de_DE
+  language: "1031"
+  installerIcon: src/assets/icons/ytmd.ico
+  uninstallerIcon: src/assets/icons/ytmd.ico
+  installerSidebar: installer/sidebar.bmp
+  uninstallerSidebar: installer/sidebar.bmp
+  installerHeader: installer/header.bmp
+  include: installer/installer.nsh
+  artifactName: ${productName} Setup ${version}.${ext}
+
+protocols:
+  - name: YouTube Music Premium
+    schemes:
+      - ytmd

@@ -4,3 +4,5 @@
 /.yarn/plugins/** binary
 /src/assets/** binary
 /.github/images/** binary
+/installer/*.bmp binary
+/installer/*.gif binary
