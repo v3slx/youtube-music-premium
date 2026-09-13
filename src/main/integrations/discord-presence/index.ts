@@ -9,6 +9,11 @@ import Conf from "conf";
 
 const DEFAULT_DISCORD_CLIENT_ID = "1548008608577364078";
 
+const FAST_RETRY_ATTEMPTS = 30;
+const FAST_RETRY_DELAY_MS = 5 * 1000;
+// Discord is often opened long after the app, so it keeps being looked for at a slower pace instead of giving up
+const SLOW_RETRY_DELAY_MS = 30 * 1000;
+
 function resolveClientId(configuredClientId: string | undefined): string {
   const clientId = (configuredClientId ?? "").trim();
   // Discord application IDs are snowflakes, anything else would make every connection attempt fail
@@ -58,63 +63,75 @@ export default class DiscordPresence implements IIntegration {
   private videoState: VideoState | null = null;
   private videoDetails: Partial<VideoDetails> | null = null;
   private progress: number | null = null;
+  private hasFullMetadata = false;
 
   private connectionRetries: number = 0;
+  private lastConnectionError: string | null = null;
 
   private UpdateActivity() {
     if (this.activityDebounceTimeout) return;
     this.activityDebounceTimeout = setTimeout(() => {
+      this.activityDebounceTimeout = null;
+      if (!this.ready || !this.discordClient) return;
       if (!this.videoDetails) {
         this.discordClient.clearActivity();
         return;
       }
-      const { title, author, album, id, thumbnails, durationSeconds, channelId, albumId } = this.videoDetails;
-      const thumbnail = getHighestResThumbnail(thumbnails);
-      // Discord shows large_text as an extra line below the artist, singles would show their title twice
-      const showAlbum = album && album.trim().toLowerCase() !== title.trim().toLowerCase();
-      this.discordClient.setActivity({
-        type: DiscordActivityType.Listening,
-        status_display_type: 1,
-        details: stringLimit(title, 128, 2),
-        details_url: `https://music.youtube.com/watch?v=${id}`,
-        state: stringLimit(author, 128, 2),
-        state_url: `https://music.youtube.com/channel/${channelId}`,
-        timestamps: {
-          start: this.videoState === VideoState.Playing ? Date.now() - this.progress * 1000 : undefined,
-          end: this.videoState === VideoState.Playing ? Date.now() + (durationSeconds - this.progress) * 1000 : undefined
-        },
-        assets: {
-          large_image: (thumbnail?.length ?? 0) <= 256 ? thumbnail : undefined,
-          large_text: showAlbum ? stringLimit(album, 128, 2) : undefined,
-          large_url: albumId ? `https://music.youtube.com/browse/${albumId}` : undefined,
-          // No small image: art assets would have to be uploaded to the configured Discord application
-          small_image: undefined,
-          small_text: getSmallImageText(this.videoState)
-        },
-        instance: false,
-        // Discord allows at most 2 buttons with labels up to 32 characters
-        buttons: [
-          {
-            // Works for everyone viewing the status, the app link only works with this app installed
-            label: "Auf YouTube Music anhören",
-            url: `https://music.youtube.com/watch?v=${id}`
+      try {
+        const { album, id, thumbnails, durationSeconds, channelId, albumId } = this.videoDetails;
+        const title = this.videoDetails.title ?? "";
+        const author = this.videoDetails.author ?? "";
+        const thumbnail = thumbnails?.length ? getHighestResThumbnail(thumbnails) : undefined;
+        // Discord shows large_text as an extra line below the artist, singles would show their title twice
+        const showAlbum = album && album.trim().toLowerCase() !== title.trim().toLowerCase();
+        this.discordClient.setActivity({
+          type: DiscordActivityType.Listening,
+          status_display_type: 1,
+          details: stringLimit(title, 128, 2),
+          details_url: `https://music.youtube.com/watch?v=${id}`,
+          state: stringLimit(author, 128, 2),
+          state_url: `https://music.youtube.com/channel/${channelId}`,
+          timestamps: {
+            start: this.videoState === VideoState.Playing ? Date.now() - this.progress * 1000 : undefined,
+            end: this.videoState === VideoState.Playing ? Date.now() + (durationSeconds - this.progress) * 1000 : undefined
           },
-          {
-            label: "In der App öffnen",
-            url: `ytmd://play/${id}`
-          }
-        ]
-      });
-      this.activityDebounceTimeout = null;
+          assets: {
+            large_image: (thumbnail?.length ?? 0) <= 256 ? thumbnail : undefined,
+            large_text: showAlbum ? stringLimit(album, 128, 2) : undefined,
+            large_url: albumId ? `https://music.youtube.com/browse/${albumId}` : undefined,
+            // No small image: art assets would have to be uploaded to the configured Discord application
+            small_image: undefined,
+            small_text: getSmallImageText(this.videoState)
+          },
+          instance: false,
+          // Discord allows at most 2 buttons with labels up to 32 characters
+          buttons: [
+            {
+              // Works for everyone viewing the status, the app link only works with this app installed
+              label: "Auf YouTube Music anhören",
+              url: `https://music.youtube.com/watch?v=${id}`
+            },
+            {
+              label: "In der App öffnen",
+              url: `ytmd://play/${id}`
+            }
+          ]
+        });
+      } catch (error) {
+        // One track with odd metadata must not stop the presence for the rest of the session
+        log.warn("Discord presence: could not build the activity", error);
+      }
     }, 1000);
   }
 
   private playerStateChanged(state: PlayerState) {
-    if (!this.ready) return;
-
     const { videoDetails, videoProgress, trackState, hasFullMetadata } = state;
     if (!videoDetails) {
-      this.discordClient.clearActivity();
+      this.videoState = null;
+      this.videoDetails = null;
+      this.progress = null;
+      this.hasFullMetadata = false;
+      if (this.ready) this.discordClient.clearActivity();
       return;
     }
     const oldState = this.videoState ?? null;
@@ -123,6 +140,10 @@ export default class DiscordPresence implements IIntegration {
     this.videoState = trackState;
     this.videoDetails = videoDetails;
     this.progress = Math.floor(videoProgress);
+    this.hasFullMetadata = hasFullMetadata;
+    // Without Discord only the state is kept, the connect handler shows it once Discord is reachable
+    if (!this.ready) return;
+
     if (
       hasFullMetadata &&
       (oldState !== this.videoState || oldId !== this.videoDetails.id || Math.abs(this.progress - oldProgress) > 1 || oldProgress > this.progress)
@@ -134,7 +155,7 @@ export default class DiscordPresence implements IIntegration {
     this.pauseTimeout = null;
     if (state.trackState == VideoState.Playing) return;
     this.pauseTimeout = setTimeout(() => {
-      if (!this.discordClient && !this.ready) return;
+      if (!this.discordClient || !this.ready) return;
       this.discordClient.clearActivity();
       this.pauseTimeout = null;
     }, 30 * 1000);
@@ -145,40 +166,60 @@ export default class DiscordPresence implements IIntegration {
     this.memoryStore = memoryStore;
   }
 
+  private connectToDiscord() {
+    const discordClient = this.discordClient;
+    if (!discordClient) return;
+    discordClient.connect().catch((error: unknown) => {
+      // A client that was replaced in the meantime must not schedule attempts for its successor
+      if (discordClient !== this.discordClient) return;
+      const reason = error instanceof Error ? error.message : String(error);
+      if (reason !== this.lastConnectionError) {
+        this.lastConnectionError = reason;
+        log.info(`Discord presence could not connect: ${reason}`);
+      }
+      this.retryDiscordConnection();
+    });
+  }
+
   private retryDiscordConnection() {
     if (!this.enabled) return;
-    if (this.connectionRetries >= 30) {
+    if (this.connectionRetries === FAST_RETRY_ATTEMPTS) {
+      log.info(`Discord not reachable after ${FAST_RETRY_ATTEMPTS} attempts, trying every ${SLOW_RETRY_DELAY_MS / 1000} seconds from now on`);
       this.memoryStore.set("discordPresenceConnectionFailed", true);
-      return;
     }
-
+    const delay = this.connectionRetries < FAST_RETRY_ATTEMPTS ? FAST_RETRY_DELAY_MS : SLOW_RETRY_DELAY_MS;
     this.connectionRetries++;
-    log.info(`Connecting to Discord attempt ${this.connectionRetries}/30`);
 
     clearTimeout(this.connectionRetryTimeout);
-    this.connectionRetryTimeout = setTimeout(() => {
-      if (!this.discordClient) return;
-      this.discordClient.connect().catch(() => this.retryDiscordConnection());
-    }, 5 * 1000);
+    this.connectionRetryTimeout = setTimeout(() => this.connectToDiscord(), delay);
   }
 
   public enable(): void {
     this.enabled = true;
     if (this.discordClient) return;
     const clientId = resolveClientId(this.store.get("integrations.discordPresenceClientId") as string | undefined);
-    this.discordClient = new DiscordClient(clientId);
+    const discordClient = new DiscordClient(clientId);
+    this.discordClient = discordClient;
 
-    this.discordClient.on("connect", () => {
+    discordClient.on("connect", () => {
       this.ready = true;
       this.connectionRetries = 0;
+      this.lastConnectionError = null;
       this.memoryStore.set("discordPresenceConnectionFailed", false);
+      this.memoryStore.set("discordPresenceUsername", discordClient.username);
+      this.memoryStore.set("discordPresenceConnected", true);
+      // A song that started while Discord wasn't reachable shows up right away instead of at the next track change
+      if (this.videoDetails && this.hasFullMetadata && this.videoState === VideoState.Playing) {
+        this.UpdateActivity();
+      }
     });
-    this.discordClient.on("close", () => {
+    discordClient.on("close", () => {
       log.info("Discord connection closed");
       this.ready = false;
+      this.memoryStore.set("discordPresenceConnected", false);
       this.retryDiscordConnection();
     });
-    this.discordClient.connect().catch(() => this.retryDiscordConnection());
+    this.connectToDiscord();
     this.stateCallback = event => {
       this.playerStateChanged(event);
     };
@@ -189,7 +230,9 @@ export default class DiscordPresence implements IIntegration {
   public disable(): void {
     this.enabled = false;
     this.connectionRetries = 0;
+    this.lastConnectionError = null;
     this.memoryStore.set("discordPresenceConnectionFailed", false);
+    this.memoryStore.set("discordPresenceConnected", false);
 
     clearTimeout(this.activityDebounceTimeout);
     clearTimeout(this.pauseTimeout);

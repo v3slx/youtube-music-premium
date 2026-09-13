@@ -79,6 +79,8 @@ export type StoreSchema = {
 
 export type MemoryStoreSchema = {
   discordPresenceConnectionFailed: boolean;
+  discordPresenceConnected: boolean;
+  discordPresenceUsername: string | null;
   shortcutsPlayPauseRegisterFailed: boolean;
   shortcutsNextRegisterFailed: boolean;
   shortcutsPreviousRegisterFailed: boolean;

@@ -138,6 +138,8 @@ store.onDidAnyChange(async newState => {
 });
 
 const discordPresenceConnectionFailed = ref<boolean>(await memoryStore.get("discordPresenceConnectionFailed"));
+const discordPresenceConnected = ref<boolean>(await memoryStore.get("discordPresenceConnected"));
+const discordPresenceUsername = ref<string | null>(await memoryStore.get("discordPresenceUsername"));
 
 const shortcutsPlayPauseRegisterFailed = ref<boolean>(await memoryStore.get("shortcutsPlayPauseRegisterFailed"));
 const shortcutsNextRegisterFailed = ref<boolean>(await memoryStore.get("shortcutsNextRegisterFailed"));
@@ -153,6 +155,8 @@ const autoUpdaterDisabled = ref<boolean>(await memoryStore.get("autoUpdaterDisab
 
 memoryStore.onStateChanged(newState => {
   discordPresenceConnectionFailed.value = newState.discordPresenceConnectionFailed;
+  discordPresenceConnected.value = newState.discordPresenceConnected;
+  discordPresenceUsername.value = newState.discordPresenceUsername;
 
   shortcutsPlayPauseRegisterFailed.value = newState.shortcutsPlayPauseRegisterFailed;
   shortcutsNextRegisterFailed.value = newState.shortcutsNextRegisterFailed;
@@ -515,9 +519,25 @@ window.ytmd.handleUpdateDownloaded(() => {
             />
             <a class="discord-portal-link" href="https://discord.com/developers/applications" target="_blank">Open Discord Developer Portal</a>
           </YTMDSetting>
-          <div v-if="discordPresenceEnabled && discordPresenceConnectionFailed" class="setting indented">
-            <p class="discord-failure">Discord connection could not be established after 30 attempts</p>
+          <div v-if="discordPresenceEnabled && discordPresenceConnected" class="setting indented">
+            <div class="name-with-description">
+              <p class="discord-connected">
+                Connected to Discord<template v-if="discordPresenceUsername"> as {{ discordPresenceUsername }}</template>
+              </p>
+              <p class="discord-failure">
+                The status appears while a song is playing. Nothing on your profile? In Discord, turn on Settings → Activity Privacy → Share my activity, and
+                make sure your status isn't set to Invisible.
+              </p>
+            </div>
+          </div>
+          <div v-else-if="discordPresenceEnabled && discordPresenceConnectionFailed" class="setting indented">
+            <p class="discord-failure">
+              Discord was not found. The Discord desktop app has to be running, the browser version can't show a status. Still looking in the background.
+            </p>
             <button @click="restartDiscordPresence">Retry</button>
+          </div>
+          <div v-else-if="discordPresenceEnabled" class="setting indented">
+            <p class="discord-failure">Looking for Discord…</p>
           </div>
           <YTMDSetting
             v-model="lastFMEnabled"
@@ -955,6 +975,11 @@ window.ytmd.handleUpdateDownloaded(() => {
 .discord-failure {
   margin: 0;
   color: #969696;
+}
+
+.discord-connected {
+  margin: 0 0 4px;
+  color: #4caf50;
 }
 
 .audio-output-actions {
