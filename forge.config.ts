@@ -20,7 +20,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     executableName: "youtube-music-premium",
     // Without this the executable keeps Electron's default copyright
-    appCopyright: "Copyright © 2026 Skorbjen",
+    appCopyright: "Copyright © 2026 v3slx",
     icon: "./src/assets/icons/ytmd",
     extraResource: [
       "./src/assets/icons/tray.ico",
@@ -78,7 +78,7 @@ const config: ForgeConfig = {
       name: "@electron-forge/publisher-github",
       config: {
         repository: {
-          owner: process.env.YTMD_UPDATE_FEED_OWNER ?? "Skorbjen",
+          owner: process.env.YTMD_UPDATE_FEED_OWNER ?? "v3slx",
           name: process.env.YTMD_UPDATE_FEED_REPOSITORY ?? "youtube-music-premium"
         }
       }

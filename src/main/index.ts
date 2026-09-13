@@ -1023,7 +1023,7 @@ const createOrShowSettingsWindow = (): void => {
   });
 
   settingsWindow.webContents.setWindowOpenHandler(details => {
-    if (details.url === "https://github.com/Skorbjen/youtube-music-premium" || details.url === "https://discord.com/developers/applications") {
+    if (details.url === "https://github.com/v3slx/youtube-music-premium" || details.url === "https://discord.com/developers/applications") {
       shell.openExternal(details.url);
     }
 

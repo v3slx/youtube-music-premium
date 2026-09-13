@@ -72,7 +72,7 @@ Also on board: companion server, Last.fm scrobbling, custom CSS, global shortcut
 
 ## Install
 
-Grab the installer from the [releases page](https://github.com/Skorbjen/youtube-music-premium/releases), or build it yourself (see below) and take it from `out/make/squirrel.windows/x64/`.
+Grab the installer from the [releases page](https://github.com/v3slx/youtube-music-premium/releases), or build it yourself (see below) and take it from `out/make/squirrel.windows/x64/`.
 
 `YouTube Music Premium Quick Setup.exe` installs without asking questions and starts the app when it's done. Once releases are published, the app updates itself from this repository. Quit the app completely, including the tray icon, before installing over an existing version.
 
@@ -81,7 +81,7 @@ Grab the installer from the [releases page](https://github.com/Skorbjen/youtube-
 You need [Git](https://git-scm.com) and [Node.js](https://nodejs.org) (v20 or newer).
 
 ```sh
-git clone https://github.com/Skorbjen/youtube-music-premium.git
+git clone https://github.com/v3slx/youtube-music-premium.git
 cd youtube-music-premium
 
 # Yarn ships with the project

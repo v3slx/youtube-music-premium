@@ -685,7 +685,7 @@ window.ytmd.handleUpdateDownloaded(() => {
             <p class="commit">Commit: {{ ytmdCommitHash }}</p>
           </span>
           <div class="links">
-            <a href="https://github.com/Skorbjen/youtube-music-premium" target="_blank">GitHub</a>
+            <a href="https://github.com/v3slx/youtube-music-premium" target="_blank">GitHub</a>
           </div>
         </div>
       </div>
