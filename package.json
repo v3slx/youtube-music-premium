@@ -1,8 +1,8 @@
 {
   "name": "youtube-music-premium",
   "productName": "YouTube Music Premium",
-  "version": "2.0.16",
-  "description": "YouTube Music Premium (custom build of YouTube Music Desktop App)",
+  "version": "2.0.17",
+  "description": "YouTube Music Premium, a desktop client for YouTube Music",
   "main": ".vite/main/index.js",
   "private": true,
   "scripts": {
