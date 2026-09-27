@@ -5,9 +5,9 @@
 # YouTube Music Premium
 
 **A desktop client for YouTube Music.**
-Mini player, equalizer, fullscreen synced lyrics, a theme that follows your music, listening stats and a command palette.
+Mini player, equalizer, word-by-word synced lyrics, a theme that follows your music, listening stats and a command palette.
 
-![Version](https://img.shields.io/badge/Version-2.1.0-e8314c?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-2.2.0-e8314c?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/Windows-x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-44-47848F?style=for-the-badge&logo=electron&logoColor=white)
 ![License](https://img.shields.io/badge/License-GPL--3.0-brightgreen?style=for-the-badge)
@@ -47,16 +47,17 @@ Three ready-made colour schemes: **Midnight**, **Ocean** and **Forest**, plus **
 
 Found under **Settings → Appearance → Theme**. Custom CSS still works on top of it.
 
-### Synced lyrics
+### Synced lyrics, word by word
 
-The lyrics tab follows along with the song:
+The lyrics follow the song to the millisecond, in the lyrics tab and in fullscreen:
 
-- the current line is highlighted and the text scrolls along
+- every word lights up while it is sung, long notes glow
 - clicking a line jumps to that point in the song
-- scrolling yourself pauses the auto scroll and a button brings you back to the current line
+- scrolling yourself holds the lyrics for a moment, a button brings you back to the current line
+- in fullscreen the lines move in a wave, lines further away go soft, three dots count down instrumental breaks, background vocals sit under their line and duets use both sides
 - **font size** and **timing offset** are adjustable and apply instantly
 
-The data comes from YouTube itself, the same source the mobile app uses. Songs without synced lyrics and music videos keep YouTube Music's plain lyrics.
+The lyrics come from YouTube Music itself and, for songs it has none for, from [LRCLIB](https://lrclib.net) and the [AMLL TTML database](https://github.com/Steve-xmh/amll-ttml-db), which has hand-made word timing for many songs. When a song's lyrics are off, switch the source right above them; the app remembers the pick for that song. Songs that only have line timing get their word timing estimated. The extra sources can be turned off under **Settings → Playback → More lyrics sources**.
 
 ### Audio output device
 
@@ -105,6 +106,8 @@ Also on board: companion server, Last.fm scrobbling, custom CSS, global shortcut
 | Synced lyrics | Playback | on |
 | Lyrics font size | Playback | 24 px |
 | Lyrics offset | Playback | 0 ms |
+| Animate word by word | Playback | on |
+| More lyrics sources (LRCLIB, AMLL) | Playback | on |
 | Audio output device | Playback | System default |
 | Pause when headphones are disconnected | Playback | on |
 | Pause when the PC is locked | Playback | off |

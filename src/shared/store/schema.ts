@@ -70,6 +70,8 @@ export type StoreSchema = {
     timedLyrics: boolean;
     timedLyricsFontSize: number;
     timedLyricsOffsetMs: number;
+    lyricsCommunitySources: boolean;
+    lyricsWordAnimation: boolean;
     equalizerEnabled: boolean;
     equalizerPreset: string;
     equalizerBands: number[];

@@ -1,8 +1,22 @@
-# YouTube Music Premium 2.1.0
+# YouTube Music Premium 2.2.0
+
+Lyrics, redone: word by word, right on time and a lot nicer to watch.
+
+## Lyrics
+
+- **Word by word:** every word lights up while it is sung, long notes glow. Songs from the AMLL database are timed word by word by hand; for all other songs the app estimates the timing of the words from the line
+- **On time:** the lyrics now follow the song to the millisecond. Before, they only moved with the player's four updates a second and then faded in, so every line came up to half a second late
+- **More songs:** when YouTube Music has no synced lyrics, the app looks them up on LRCLIB and in the AMLL TTML database
+- **Pick the source:** if the lyrics of a song are off, switch between AMLL, LRCLIB and YouTube right above the lyrics; the app remembers your pick for that song
+- **Fullscreen lyrics, redesigned:** the lines move up in a wave, lines further away go soft, three dots count down instrumental breaks, background vocals sit under their line, duets use both sides, and the album art drifts slowly in the background
+- The lyrics tab next to the player gets the same word animation
+- Two new settings under Playback: "Animate word by word" and "More lyrics sources" (only the song title, artist and length are sent to lrclib.net and amll.dev)
+
+Your existing settings are kept as they are.
+
+## New in 2.1.0
 
 The biggest update so far: a mini player, an equalizer, fullscreen lyrics, a theme that follows your music, listening statistics and a command palette - plus a faster, steadier app underneath.
-
-## Highlights
 
 ### Mini player
 
@@ -36,7 +50,7 @@ The biggest update so far: a mini player, an equalizer, fullscreen lyrics, a the
 - Press `Ctrl+K` anywhere in YouTube Music for playback, navigation, themes, equalizer presets, the mini player, fullscreen lyrics and more
 - Lists every keyboard shortcut, including the global ones you set
 
-## Improvements
+### Improvements
 
 - Redesigned settings with groups and a search that highlights what it finds
 - Song change notifications with the album art, "artist · album" and previous/pause/next buttons; they no longer show while the app is in front
@@ -47,12 +61,10 @@ The biggest update so far: a mini player, an equalizer, fullscreen lyrics, a the
 - Midnight, Ocean and Forest each have their own accent colour in settings, the mini player and this window
 - This window appears once after each update
 
-## Performance and stability
+### Performance and stability
 
 - Much less work while music plays: the app only syncs the player state when something actually changed, instead of on every interaction in YouTube Music
 - Taskbar buttons and progress are only updated when they change
 - A failing network request no longer closes the app, and Last.fm handles being offline, expired sessions and repeated sign-in prompts
 - Lyrics no longer keep running against the next song when that song has no lyrics
 - Settings added in an update always get their defaults, and invalid values are refused instead of crashing the app
-
-Your existing settings are kept as they are.

@@ -105,6 +105,8 @@ const ratioVolume = ref<boolean>(playback.ratioVolume);
 const timedLyrics = ref<boolean>(playback.timedLyrics);
 const timedLyricsFontSize = ref<number>(playback.timedLyricsFontSize);
 const timedLyricsOffsetMs = ref<number>(playback.timedLyricsOffsetMs);
+const lyricsCommunitySources = ref<boolean>(playback.lyricsCommunitySources);
+const lyricsWordAnimation = ref<boolean>(playback.lyricsWordAnimation);
 const audioOutputDeviceId = ref<string>(playback.audioOutputDeviceId);
 const equalizerEnabled = ref<boolean>(playback.equalizerEnabled);
 const equalizerPreset = ref<string>(playback.equalizerPreset);
@@ -191,6 +193,8 @@ store.onDidAnyChange(async newState => {
   timedLyrics.value = newState.playback.timedLyrics;
   timedLyricsFontSize.value = newState.playback.timedLyricsFontSize;
   timedLyricsOffsetMs.value = newState.playback.timedLyricsOffsetMs;
+  lyricsCommunitySources.value = newState.playback.lyricsCommunitySources;
+  lyricsWordAnimation.value = newState.playback.lyricsWordAnimation;
   audioOutputDeviceId.value = newState.playback.audioOutputDeviceId;
   equalizerEnabled.value = newState.playback.equalizerEnabled;
   equalizerPreset.value = newState.playback.equalizerPreset;
@@ -289,6 +293,8 @@ async function settingsChanged() {
   store.set("playback.timedLyrics", timedLyrics.value);
   store.set("playback.timedLyricsFontSize", timedLyricsFontSize.value);
   store.set("playback.timedLyricsOffsetMs", timedLyricsOffsetMs.value);
+  store.set("playback.lyricsCommunitySources", lyricsCommunitySources.value);
+  store.set("playback.lyricsWordAnimation", lyricsWordAnimation.value);
   store.set("playback.audioOutputDeviceId", audioOutputDeviceId.value);
   store.set("playback.equalizerEnabled", equalizerEnabled.value);
   store.set("playback.equalizerPreset", equalizerPreset.value);
@@ -570,6 +576,28 @@ window.ytmd.handleUpdateDownloaded(() => {
             type="checkbox"
             name="Synced lyrics"
             description="Follow along with supported songs. Adjust the lyrics font size and timing offset below."
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="timedLyrics || searching"
+            v-model="lyricsWordAnimation"
+            :disabled="!timedLyrics"
+            disabled-message="Enable Synced lyrics in Playback to adjust this setting."
+            type="checkbox"
+            indented
+            name="Animate word by word"
+            description="Each word lights up as it is sung. Lyrics that are only timed by line get their word timing estimated."
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="timedLyrics || searching"
+            v-model="lyricsCommunitySources"
+            :disabled="!timedLyrics"
+            disabled-message="Enable Synced lyrics in Playback to adjust this setting."
+            type="checkbox"
+            indented
+            name="More lyrics sources"
+            description="Also look up synced lyrics on LRCLIB and the AMLL TTML database, for songs YouTube Music has none for and for word-by-word timing. Sends the song title, artist and length to lrclib.net and amll.dev."
             @change="settingsChanged"
           />
           <YTMDSetting

@@ -32,7 +32,8 @@ contextBridge.exposeInMainWorld("ytmd", {
     ipcRenderer.send("ytmView:storeStateChanged", queueState, likeStatus, volume, muted, adPlaying),
   sendCreatePlaylistObservation: (playlist: unknown) => ipcRenderer.send("ytmView:createPlaylistObserved", playlist),
   sendDeletePlaylistObservation: (playlistId: string) => ipcRenderer.send("ytmView:deletePlaylistObserved", playlistId),
-  sendLyricsLine: (line: string | null) => ipcRenderer.send("ytmView:lyricsLine", typeof line === "string" ? line.slice(0, 300) : null)
+  sendLyricsLine: (line: string | null) => ipcRenderer.send("ytmView:lyricsLine", typeof line === "string" ? line.slice(0, 300) : null),
+  fetchLyrics: (query: unknown) => ipcRenderer.invoke("lyrics:fetch", query)
 });
 
 function createStyleSheet() {
@@ -100,33 +101,7 @@ function createStyleSheet() {
         color: #FFFFFF;
       }
 
-      .ytmd-lyrics {
-        margin-top: 16px;
-      }
-
-      .ytmd-lyrics .ytmd-lyric-line {
-        margin-bottom: 16px;
-        font-size: var(--ytmd-lyrics-font-size, 24px);
-        color: rgba(255, 255, 255, 0.5);
-        cursor: pointer;
-      }
-
-      .ytmd-lyrics .ytmd-lyric-line.active {
-        color: rgba(255, 255, 255, 1);
-      }
-
-      .ytmd-lyrics .ytmd-lyric-line:last-child {
-        margin-bottom: 24px;
-      }
-
-      .ytmd-lyrics-source, .ytmd-lyrics-note {
-        font-size: 14px;
-        color: rgba(255, 255, 255, 0.7);
-      }
-
-      .ytmd-lyrics-note {
-        margin-bottom: 128px;
-      }
+      /* The synced lyrics bring their own styles (timedlyrics.script.js) */
 
       /* Keeps the "Sync to video time" button positioned above the lyrics */
       .ytmusic-tab-renderer[page-type='MUSIC_PAGE_TYPE_TRACK_LYRICS'] > #contents {
@@ -278,17 +253,21 @@ async function addTimedLyrics() {
 async function applyTimedLyricsSettings(playback: StoreSchema["playback"]) {
   (
     await webFrame.executeJavaScript(`
-      (function(enabled, offsetMs, fontSize) {
-        window.__YTMD_TIMED_LYRICS_ENABLED__ = enabled;
-        window.__YTMD_TIMED_LYRICS_OFFSET_MS__ = offsetMs;
+      (function(options, fontSize) {
+        window.__YTMD_LYRICS_OPTIONS__ = options;
         document.documentElement.style.setProperty("--ytmd-lyrics-font-size", fontSize + "px");
-        if (window.__YTMD_TIMED_LYRICS__) {
-          window.__YTMD_TIMED_LYRICS__.setEnabled(enabled);
-          window.__YTMD_TIMED_LYRICS__.setOffsetMs(offsetMs);
-        }
+        if (window.__YTMD_TIMED_LYRICS__) window.__YTMD_TIMED_LYRICS__.configure(options);
       })
     `)
-  )(playback.timedLyrics, playback.timedLyricsOffsetMs, playback.timedLyricsFontSize);
+  )(
+    {
+      enabled: playback.timedLyrics,
+      offsetMs: playback.timedLyricsOffsetMs,
+      communitySources: playback.lyricsCommunitySources,
+      wordAnimation: playback.lyricsWordAnimation
+    },
+    playback.timedLyricsFontSize
+  );
 }
 
 async function addEqualizer() {
