@@ -1158,6 +1158,8 @@ function sendMainWindowStateIpc() {
       maximized: mainWindow.isMaximized(),
       fullscreen: mainWindow.isFullScreen()
     });
+    // Fullscreen lyrics show whether the window fills the screen
+    ytmView?.webContents.send("ytmView:windowFullscreenChanged", mainWindow.isFullScreen());
   }
 }
 
@@ -2240,6 +2242,14 @@ app.on("ready", async () => {
     if (!store.get("playback").lyricsCommunitySources || !isValidLyricsQuery(query)) return [];
     return await fetchCommunityLyrics(query);
   });
+
+  // Full screen for the fullscreen lyrics. Not through the page's fullscreen API: that would also switch YouTube
+  // Music's own player into its fullscreen mode underneath, and it doesn't always find its way back from it.
+  ipcMain.on("ytmView:setWindowFullscreen", (event, fullscreen: unknown) => {
+    if (event.sender !== ytmView?.webContents || !mainWindow) return;
+    mainWindow.setFullScreen(fullscreen === true);
+  });
+  ipcMain.handle("ytmView:isWindowFullscreen", event => event.sender === ytmView?.webContents && !!mainWindow?.isFullScreen());
 
   ipcMain.on("ytmView:lyricsLine", (event, line: unknown) => {
     if (event.sender !== ytmView?.webContents) return;

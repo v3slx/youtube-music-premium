@@ -33,7 +33,12 @@ contextBridge.exposeInMainWorld("ytmd", {
   sendCreatePlaylistObservation: (playlist: unknown) => ipcRenderer.send("ytmView:createPlaylistObserved", playlist),
   sendDeletePlaylistObservation: (playlistId: string) => ipcRenderer.send("ytmView:deletePlaylistObserved", playlistId),
   sendLyricsLine: (line: string | null) => ipcRenderer.send("ytmView:lyricsLine", typeof line === "string" ? line.slice(0, 300) : null),
-  fetchLyrics: (query: unknown) => ipcRenderer.invoke("lyrics:fetch", query)
+  fetchLyrics: (query: unknown) => ipcRenderer.invoke("lyrics:fetch", query),
+  setWindowFullscreen: (fullscreen: boolean) => ipcRenderer.send("ytmView:setWindowFullscreen", fullscreen === true),
+  isWindowFullscreen: (): Promise<boolean> => ipcRenderer.invoke("ytmView:isWindowFullscreen"),
+  onWindowFullscreenChanged: (callback: (fullscreen: boolean) => void) => {
+    ipcRenderer.on("ytmView:windowFullscreenChanged", (_event, fullscreen: unknown) => callback(fullscreen === true));
+  }
 });
 
 function createStyleSheet() {

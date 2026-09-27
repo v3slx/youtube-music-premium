@@ -5,6 +5,7 @@ Lyrics, redone: word by word, right on time and a lot nicer to watch.
 ## Fixed in 2.1.5
 
 - After a few songs in a row the lyrics could jump to the end and fullscreen lyrics showed a position far past the end of the song (for example 12:50 of 3:22). They now always follow the song itself
+- Leaving full screen (F11) in fullscreen lyrics could leave YouTube Music's page broken, with a tiny cover and a jumpy layout. Full screen now only enlarges the window and no longer touches YouTube Music's own player
 
 ## Lyrics
 

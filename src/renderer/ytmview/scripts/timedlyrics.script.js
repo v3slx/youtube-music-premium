@@ -1417,16 +1417,22 @@
   fsMute.onclick = toggleMute;
 
   // ── Real full screen (F11) ──
-  // The layer itself goes full screen; the app then fills the whole screen without its title bar
+  // The app window fills the screen without its title bar. The page's own fullscreen API is left alone on purpose:
+  // it would also put YouTube Music's player into its fullscreen mode underneath the lyrics.
+  let windowFullscreen = false;
+  function showWindowFullscreen(active) {
+    windowFullscreen = active;
+    setIcon(fsWindowFullscreen, active ? "fullscreen_exit" : "fullscreen", active ? "Exit full screen (F11)" : "Full screen (F11)");
+  }
+  function setWindowFullscreen(active) {
+    if (typeof window.ytmd?.setWindowFullscreen === "function") window.ytmd.setWindowFullscreen(active);
+  }
   function toggleWindowFullscreen() {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
-    else void fullscreenHost.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+    setWindowFullscreen(!windowFullscreen);
   }
   fsWindowFullscreen.onclick = toggleWindowFullscreen;
-  document.addEventListener("fullscreenchange", () => {
-    const active = document.fullscreenElement === fullscreenHost;
-    setIcon(fsWindowFullscreen, active ? "fullscreen_exit" : "fullscreen", active ? "Exit full screen (F11)" : "Full screen (F11)");
-  });
+  if (typeof window.ytmd?.onWindowFullscreenChanged === "function") window.ytmd.onWindowFullscreenChanged(showWindowFullscreen);
+  if (typeof window.ytmd?.isWindowFullscreen === "function") void window.ytmd.isWindowFullscreen().then(showWindowFullscreen, () => {});
 
   // ── Controls that get out of the way ──
   const IDLE_AFTER_MS = 2600;
@@ -1493,7 +1499,7 @@
     switch (event.key) {
       case "Escape":
         // Out of full screen first, a second Esc closes the lyrics
-        if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+        if (windowFullscreen) setWindowFullscreen(false);
         else closeFullscreen();
         break;
       case "F11":
@@ -1573,7 +1579,8 @@
     clearTimeout(renderTimer);
     clearTimeout(switchFallback);
     clearTimeout(idleTimer);
-    if (document.fullscreenElement === fullscreenHost) void document.exitFullscreen().catch(() => {});
+    // Leave full screen with the lyrics, unless a music video put the window there (it uses the page's fullscreen)
+    if (windowFullscreen && !document.fullscreenElement) setWindowFullscreen(false);
     resizeObserver.disconnect();
     window.removeEventListener("keydown", onFullscreenKeydown, true);
     setTimeout(() => {
