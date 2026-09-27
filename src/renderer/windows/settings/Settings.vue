@@ -5,6 +5,7 @@ import YTMDSetting from "../../components/YTMDSetting.vue";
 import SettingsSection from "../../components/SettingsSection.vue";
 import SettingsSearchText from "../../components/SettingsSearchText.vue";
 import EqualizerEditor from "../../components/EqualizerEditor.vue";
+import ListeningStats from "../../components/ListeningStats.vue";
 import { provideSettingsSearch } from "../../composables/useSettingsSearch";
 import { EQUALIZER_PRESETS, StoreSchema, ThemePreset, TrayIconStyle } from "~shared/store/schema";
 import { AuthToken } from "~shared/integrations/companion-server/types";
@@ -30,6 +31,7 @@ const sections = [
   { id: 3, title: "Playback", icon: "play_circle" },
   { id: 4, title: "Integrations", icon: "extension" },
   { id: 5, title: "Shortcuts", icon: "keyboard" },
+  { id: 7, title: "Listening stats", icon: "insights" },
   { id: 6, title: "Advanced", icon: "code" },
   { id: 99, title: "About", icon: "info" }
 ];
@@ -68,6 +70,22 @@ const disableHardwareAcceleration = ref<boolean>(general.disableHardwareAccelera
 const hideToTrayOnClose = ref<boolean>(general.hideToTrayOnClose);
 const showNotificationOnSongChange = ref<boolean>(general.showNotificationOnSongChange);
 const notificationControls = ref<boolean>(general.notificationControls);
+const listeningStatsEnabled = ref<boolean>(general.listeningStats);
+const transferMessage = ref<{ text: string; error: boolean } | null>(null);
+
+const showWhatsNew = () => window.ytmd.showWhatsNew();
+
+async function exportSettings() {
+  const result = await window.ytmd.exportSettings();
+  if (result.ok) transferMessage.value = { text: `Settings exported to ${result.path}`, error: false };
+  else if (!result.canceled) transferMessage.value = { text: result.error ?? "The settings could not be exported.", error: true };
+}
+
+async function importSettings() {
+  const result = await window.ytmd.importSettings();
+  if (result.ok) transferMessage.value = { text: `${result.count} settings imported.`, error: false };
+  else if (!result.canceled) transferMessage.value = { text: result.error ?? "The settings could not be imported.", error: true };
+}
 const startOnBoot = ref<boolean>(general.startOnBoot);
 const startMinimized = ref<boolean>(general.startMinimized);
 
@@ -153,6 +171,7 @@ store.onDidAnyChange(async newState => {
   hideToTrayOnClose.value = newState.general.hideToTrayOnClose;
   showNotificationOnSongChange.value = newState.general.showNotificationOnSongChange;
   notificationControls.value = newState.general.notificationControls;
+  listeningStatsEnabled.value = newState.general.listeningStats;
   startOnBoot.value = newState.general.startOnBoot;
   startMinimized.value = newState.general.startMinimized;
 
@@ -250,6 +269,7 @@ async function settingsChanged() {
   store.set("general.hideToTrayOnClose", hideToTrayOnClose.value);
   store.set("general.showNotificationOnSongChange", showNotificationOnSongChange.value);
   store.set("general.notificationControls", notificationControls.value);
+  store.set("general.listeningStats", listeningStatsEnabled.value);
   store.set("general.startOnBoot", startOnBoot.value);
   store.set("general.startMinimized", startMinimized.value);
   store.set("general.disableHardwareAcceleration", disableHardwareAcceleration.value);
@@ -920,6 +940,25 @@ window.ytmd.handleUpdateDownloaded(() => {
           </YTMDSetting>
         </SettingsSection>
 
+        <SettingsSection
+          v-show="sectionVisible(7)"
+          :section="7"
+          title="Listening stats"
+          description="What you listened to, kept on this PC only."
+          class="stats-tab"
+        >
+          <YTMDSetting
+            v-model="listeningStatsEnabled"
+            type="checkbox"
+            name="Keep listening statistics"
+            description="Listening time, top songs and artists. Stored on this PC only, nothing is sent anywhere."
+            @change="settingsChanged"
+          />
+          <YTMDSetting v-if="!searching" type="custom" flex-column name="Your listening">
+            <ListeningStats :active="currentTab === 7" />
+          </YTMDSetting>
+        </SettingsSection>
+
         <SettingsSection v-show="sectionVisible(6)" :section="6" title="Advanced" description="Customize styles and rendering behavior." class="advanced-tab">
           <YTMDSetting
             v-model="disableHardwareAcceleration"
@@ -947,6 +986,18 @@ window.ytmd.handleUpdateDownloaded(() => {
             @file-change="settingChangedFile"
             @clear="removeCustomCSSPath"
           />
+          <YTMDSetting
+            type="custom"
+            flex-column
+            name="Export and import settings"
+            description="Save your settings to a file, for a backup or another PC. Sign-ins and authorized companions are not included."
+          >
+            <div class="transfer-actions">
+              <button type="button" @click="exportSettings"><span class="material-symbols-outlined" aria-hidden="true">upload</span>Export</button>
+              <button type="button" @click="importSettings"><span class="material-symbols-outlined" aria-hidden="true">download</span>Import</button>
+            </div>
+            <p v-if="transferMessage" class="transfer-message" :class="{ error: transferMessage.error }" role="status">{{ transferMessage.text }}</p>
+          </YTMDSetting>
         </SettingsSection>
 
         <SettingsSection v-show="sectionVisible(99)" :section="99" title="About" description="App information and updates." class="about-tab">
@@ -989,6 +1040,9 @@ window.ytmd.handleUpdateDownloaded(() => {
               <p class="commit">Commit: {{ ytmdCommitHash }}</p>
             </div>
             <div class="links">
+              <button type="button" class="whats-new-button" @click="showWhatsNew">
+                <span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>What's new
+              </button>
               <a href="https://github.com/v3slx/youtube-music-premium" target="_blank">GitHub</a>
             </div>
           </YTMDSetting>
@@ -1312,6 +1366,30 @@ a:hover {
   display: flex;
   flex-basis: 100%;
   justify-content: flex-end;
+}
+
+.transfer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.transfer-message {
+  margin: 0;
+  color: var(--ytmd-success);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.transfer-message.error {
+  color: var(--ytmd-danger);
+}
+
+.links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .authorized-companions-table {

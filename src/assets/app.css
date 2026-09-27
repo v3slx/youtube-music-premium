@@ -29,6 +29,8 @@
   --ytmd-raised: #262036;
   --ytmd-hover: #30283f;
   --ytmd-text: #f6f1ff;
+  --ytmd-accent: #b39dff;
+  --ytmd-on-accent: #1a1233;
 }
 
 :root[data-theme="ocean"] {
@@ -37,6 +39,8 @@
   --ytmd-raised: #12303e;
   --ytmd-hover: #1a4152;
   --ytmd-text: #e4f7ff;
+  --ytmd-accent: #5cc8e8;
+  --ytmd-on-accent: #04202b;
 }
 
 :root[data-theme="forest"] {
@@ -45,6 +49,8 @@
   --ytmd-raised: #1f3323;
   --ytmd-hover: #2a432e;
   --ytmd-text: #eff9eb;
+  --ytmd-accent: #7fd49a;
+  --ytmd-on-accent: #0d2414;
 }
 
 html,

@@ -46,5 +46,10 @@ contextBridge.exposeInMainWorld("ytmd", {
   isAppUpdateAvailable: async (): Promise<boolean> => await ipcRenderer.invoke("app:isUpdateAvailable"),
   isAppUpdateDownloaded: async (): Promise<boolean> => await ipcRenderer.invoke("app:isUpdateDownloaded"),
   getTrueFilePath: (file: File) => webUtils.getPathForFile(file),
-  getAudioOutputDevices: async (): Promise<{ deviceId: string; label: string }[]> => await ipcRenderer.invoke("audioOutput:getDevices")
+  getAudioOutputDevices: async (): Promise<{ deviceId: string; label: string }[]> => await ipcRenderer.invoke("audioOutput:getDevices"),
+  getListeningStats: async () => await ipcRenderer.invoke("stats:get"),
+  clearListeningStats: async () => await ipcRenderer.invoke("stats:clear"),
+  exportSettings: async () => await ipcRenderer.invoke("settings:export"),
+  importSettings: async () => await ipcRenderer.invoke("settings:import"),
+  showWhatsNew: () => ipcRenderer.send("whatsNew:show")
 });

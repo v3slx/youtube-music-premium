@@ -1,4 +1,4 @@
-import { MiniPlayerState, WindowsEventArguments } from "~shared/types";
+import { ListeningStatsSummary, MiniPlayerState, WindowsEventArguments } from "~shared/types";
 import Store from "../store-ipc/store";
 import { StoreSchema, MemoryStoreSchema } from "~shared/store/schema";
 import MemoryStore from "../store-ipc/memory-store";
@@ -21,6 +21,11 @@ declare global {
       restartApplicationForUpdate(): void;
       getTrueFilePath(file: File): string;
       getAudioOutputDevices(): Promise<{ deviceId: string; label: string }[]>;
+      getListeningStats(): Promise<ListeningStatsSummary | null>;
+      clearListeningStats(): Promise<void>;
+      exportSettings(): Promise<{ ok: boolean; canceled?: boolean; path?: string; error?: string }>;
+      importSettings(): Promise<{ ok: boolean; canceled?: boolean; count?: number; error?: string }>;
+      showWhatsNew(): void;
 
       // Companion Authorization specific
       sendResult(authorized: boolean);

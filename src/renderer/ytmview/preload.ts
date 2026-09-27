@@ -19,6 +19,7 @@ import toggleLikeScript from "./scripts/togglelike.script?raw";
 import toggleDislikeScript from "./scripts/toggledislike.script?raw";
 import timedLyricsScript from "./scripts/timedlyrics.script?raw";
 import equalizerScript from "./scripts/equalizer.script?raw";
+import { setupCommandPalette } from "./command-palette";
 
 const store = new Store<StoreSchema>();
 
@@ -572,7 +573,7 @@ window.addEventListener("load", async () => {
     document.querySelector("ytmusic-app-layout>ytmusic-player-bar #volume-slider").classList.add("ytmd-persist-volume-slider");
   }
 
-  ipcRenderer.on("remoteControl:execute", async (_event, command, value) => {
+  const executeRemoteCommand = async (command: string, value?: unknown) => {
     switch (command) {
       case "playPause": {
         (
@@ -688,7 +689,7 @@ window.addEventListener("load", async () => {
       }
 
       case "setVolume": {
-        const valueInt: number = parseInt(value);
+        const valueInt: number = parseInt(String(value));
         // Check if Volume is a number and between 0 and 100
         if (isNaN(valueInt) || valueInt < 0 || valueInt > 100) {
           return;
@@ -758,7 +759,7 @@ window.addEventListener("load", async () => {
         break;
 
       case "playQueueIndex": {
-        const index: number = parseInt(value);
+        const index: number = parseInt(String(value));
 
         (
           await webFrame.executeJavaScript(`
@@ -827,7 +828,34 @@ window.addEventListener("load", async () => {
         );
         break;
       }
+
+      case "toggleMute": {
+        (
+          await webFrame.executeJavaScript(`
+            (function() {
+              const playerApi = window.__YTMD_HOOK__.ytmPlayerBar.playerApi;
+              const muted = playerApi.isMuted();
+              if (muted) playerApi.unMute();
+              else playerApi.mute();
+              window.__YTMD_HOOK__.ytmStore.dispatch({ type: 'SET_MUTED', payload: !muted });
+            })
+          `)
+        )();
+        break;
+      }
     }
+  };
+
+  ipcRenderer.on("remoteControl:execute", (_event, command: string, value?: unknown) => void executeRemoteCommand(command, value));
+
+  setupCommandPalette({
+    remote: executeRemoteCommand,
+    app: (action, value) => ipcRenderer.send("palette:run", action, value),
+    getSettings: async () => ({
+      shortcuts: await store.get("shortcuts"),
+      playback: await store.get("playback"),
+      appearance: await store.get("appearance")
+    })
   });
 
   ipcRenderer.on("ytmView:getPlaylists", async (_event, requestId) => {

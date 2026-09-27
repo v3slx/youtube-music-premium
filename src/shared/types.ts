@@ -23,3 +23,15 @@ export type MiniPlayerState = {
   lyricsLine: string | null;
   alwaysOnTop: boolean;
 };
+
+// Listening statistics for the settings window (kept on this PC only)
+export type ListeningStatsSummary = {
+  since: number | null;
+  totalSeconds: number;
+  todaySeconds: number;
+  weekSeconds: number;
+  totalPlays: number;
+  days: { date: string; seconds: number }[];
+  topSongs: { videoId: string; title: string; author: string; thumbnail: string | null; plays: number; seconds: number }[];
+  topArtists: { name: string; plays: number; seconds: number }[];
+};
