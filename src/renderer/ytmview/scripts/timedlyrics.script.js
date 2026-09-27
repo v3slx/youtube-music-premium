@@ -28,11 +28,38 @@
     return node;
   }
 
+  // Filled icons drawn as SVG: YouTube Music only loads its icon font in the thinnest weight
+  const ICONS = {
+    close: "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+    sync: "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z",
+    play_arrow: "M8 5.14v13.72a1 1 0 0 0 1.52.85l10.29-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z",
+    pause: "M7 5h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm7 0h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z",
+    skip_previous: "M7 6a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zm11 .87v10.26a1 1 0 0 1-1.55.83L9.2 12.83a1 1 0 0 1 0-1.66l7.25-5.13A1 1 0 0 1 18 6.87z",
+    skip_next: "M17 6a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zM6 6.87v10.26a1 1 0 0 0 1.55.83l7.25-5.13a1 1 0 0 0 0-1.66L7.55 6.04A1 1 0 0 0 6 6.87z",
+    volume_up: "M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z",
+    volume_down: "M18.5 12A4.5 4.5 0 0 0 16 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z",
+    volume_off: "M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z",
+    fullscreen: "M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z",
+    fullscreen_exit: "M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"
+  };
+
+  function svgIcon(name) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("class", "icon");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", ICONS[name]);
+    svg.append(path);
+    return svg;
+  }
+
   function iconButton(className, icon, label, title) {
     const button = element("button", className);
     button.type = "button";
     if (title) button.title = title;
-    button.append(element("span", "icon", icon));
+    if (title && !label) button.setAttribute("aria-label", title.replace(/\s*\([^)]*\)$/, ""));
+    button.append(svgIcon(icon));
     if (label) button.append(element("span", "label", label));
     return button;
   }
@@ -74,7 +101,7 @@
       const found = document.querySelector("#movie_player video") ?? document.querySelector("video");
       if (found && found !== video) {
         video = found;
-        for (const type of ["play", "playing", "pause", "seeked", "seeking", "ratechange", "loadedmetadata"]) video.addEventListener(type, onVideoEvent);
+        for (const type of ["play", "playing", "pause", "seeked", "seeking", "ratechange", "loadedmetadata", "volumechange", "durationchange"]) video.addEventListener(type, onVideoEvent);
       }
     }
     return video;
@@ -290,6 +317,11 @@
   function onVideoEvent() {
     tick(false);
     kick();
+    if (fullscreenOpen) {
+      updatePlayState();
+      updateVolume();
+      updateProgress(true);
+    }
   }
 
   /** Finds the last line that has started (binary search, the lines are sorted by start) */
@@ -758,38 +790,72 @@
     button:hover { background: rgba(255,255,255,0.22); }
     button.selected:hover { background: #fff; }
     button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-    .icon {
-      font-family: "Material Symbols Outlined"; font-size: 22px; line-height: 1; font-weight: normal; font-style: normal;
-      letter-spacing: normal; text-transform: none; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased;
-    }
+    .icon { display: block; flex-shrink: 0; width: 1em; height: 1em; font-size: 22px; fill: currentColor; }
     .close { width: 46px; height: 46px; padding: 0; justify-content: center; }
     .viewport {
       position: relative; z-index: 1; flex: 1; overflow: hidden; outline: none;
       -webkit-mask-image: linear-gradient(transparent, #000 13%, #000 80%, transparent);
     }
-    .track { position: absolute; left: 0; right: 0; top: 0; padding: 0 max(40px, calc((100% - 1080px) / 2)); --y: 0px; }
+    .track { position: absolute; left: 0; right: 0; top: 0; padding: 0 max(40px, calc((100% - 1180px) / 2)); --y: 0px; }
     .item {
       transform: translateY(var(--y)); transition: transform 820ms cubic-bezier(0.2, 0.9, 0.25, 1), opacity 420ms ease, filter 520ms ease;
       transition-delay: var(--delay, 0ms);
     }
     .line {
-      margin: 0 0 30px; font-size: clamp(28px, 3.5vw, 52px); font-weight: 800; line-height: 1.22; letter-spacing: -0.01em;
+      margin: 0 0 30px; font-size: clamp(28px, 3.4vw, 60px); font-weight: 800; line-height: 1.22; letter-spacing: -0.01em;
       cursor: pointer; opacity: 0.36; filter: blur(var(--blur, 0px)); transform-origin: left center;
     }
     .line p { margin: 0; }
     .line.alternate { text-align: right; transform-origin: right center; }
     .line .ytmd-line-background { font-size: 0.6em; font-weight: 700; margin-top: 6px; }
-    .line:hover { opacity: 0.6; filter: none; }
+    .overlay:not(.idle) .line:hover { opacity: 0.6; filter: none; }
     .line.active { opacity: 1; filter: none; }
-    .interlude { height: 0; margin: 0; opacity: 0; font-size: clamp(28px, 3.5vw, 52px); transition-property: transform, opacity, height, margin; }
+    .interlude { height: 0; margin: 0; opacity: 0; font-size: clamp(28px, 3.4vw, 60px); transition-property: transform, opacity, height, margin; }
     .interlude.active { height: 0.6em; margin: 0 0 34px; opacity: 1; }
     ${interludeCss(".track")}
     .track.manual .item { transition: none; filter: none; }
     .empty { position: absolute; z-index: 1; top: 50%; left: 0; right: 0; margin: 0; text-align: center; font-size: 20px; color: rgba(255,255,255,0.78); }
-    .resume { position: absolute; z-index: 2; left: 50%; bottom: 28px; transform: translateX(-50%); background: rgba(20,20,24,0.72); backdrop-filter: blur(12px); }
+    .resume { position: absolute; z-index: 3; left: 50%; bottom: 150px; transform: translateX(-50%); background: rgba(20,20,24,0.72); backdrop-filter: blur(12px); }
+    /* Everything you can click fades out while the mouse rests, is outside the app or the app is in the background */
+    .hideable { transition: opacity 320ms ease, transform 320ms ease; }
+    .overlay.idle, .overlay.idle .line { cursor: none; }
+    .overlay.idle .hideable { opacity: 0; pointer-events: none; }
+    .overlay.idle .controls { transform: translateY(14px); }
+    .controls {
+      position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 8px;
+      padding: 64px max(40px, calc((100% - 1180px) / 2)) 24px;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.5) 42%, rgba(0, 0, 0, 0.72));
+    }
+    .progress-row { display: flex; align-items: center; gap: 14px; }
+    .time { min-width: 44px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: rgba(255,255,255,0.75); }
+    .time.total { text-align: right; }
+    .buttons-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+    .transport { display: flex; align-items: center; gap: 18px; }
+    .transport button, .right button { width: 44px; height: 44px; padding: 0; justify-content: center; background: transparent; }
+    .transport button:hover, .right button:hover { background: rgba(255,255,255,0.14); }
+    .transport button:active, .right button:active { transform: scale(0.94); }
+    .transport .icon { font-size: 30px; }
+    .transport .play { width: 60px; height: 60px; color: #111; background: #fff; box-shadow: 0 8px 26px rgba(0,0,0,0.35); transition: transform 150ms ease; }
+    .transport .play:hover { background: #fff; transform: scale(1.06); }
+    .transport .play .icon { font-size: 30px; }
+    .right { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+    .right .icon { font-size: 24px; }
+    input[type="range"] { -webkit-appearance: none; appearance: none; height: 20px; margin: 0; background: transparent; cursor: pointer; --fill: 0%; }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 4px; border-radius: 999px; background: linear-gradient(90deg, #fff var(--fill), rgba(255,255,255,0.26) var(--fill));
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #fff;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.45); opacity: 0; transition: opacity 150ms ease;
+    }
+    input[type="range"]:hover::-webkit-slider-thumb, input[type="range"]:active::-webkit-slider-thumb, input[type="range"]:focus-visible::-webkit-slider-thumb { opacity: 1; }
+    input[type="range"]:focus-visible { outline: none; }
+    input[type="range"]:focus-visible::-webkit-slider-runnable-track { box-shadow: 0 0 0 2px rgba(255,255,255,0.55); }
+    .seek { flex: 1; }
+    .volume { width: 112px; margin: 0 8px 0 2px; }
     .hidden { display: none !important; }
     @media (prefers-reduced-motion: reduce) {
-      .overlay, .item, .backdrop { transition: none; animation: none; }
+      .overlay, .item, .backdrop, .hideable { transition: none; animation: none; }
       .interlude.active .ytmd-interlude-dots { animation: none; }
     }
   `;
@@ -805,8 +871,8 @@
   const fsTitle = element("p", "title");
   const fsArtist = element("p", "artist");
   fsMeta.append(fsTitle, fsArtist);
-  const fsSources = element("div", "sources");
-  const fsCloseButton = iconButton("close", "close", null, "Close (Esc)");
+  const fsSources = element("div", "sources hideable");
+  const fsCloseButton = iconButton("close hideable", "close", null, "Close (Esc)");
   fsCloseButton.setAttribute("aria-label", "Close fullscreen lyrics");
   fsHeader.append(fsCover, fsMeta, fsSources, fsCloseButton);
   const fsViewport = element("div", "viewport");
@@ -815,7 +881,32 @@
   fsViewport.append(fsTrack);
   const fsEmpty = element("p", "empty hidden", "No synced lyrics for this song");
   const fsResume = iconButton("resume hidden", "sync", "Back to the current line");
-  fsOverlay.append(fsBackdrop, fsBackdropSecond, element("div", "shade"), fsHeader, fsViewport, fsEmpty, fsResume);
+  // Player controls at the bottom
+  const fsControls = element("div", "controls hideable");
+  const fsCurrentTime = element("span", "time", "0:00");
+  const fsSeek = element("input", "seek");
+  Object.assign(fsSeek, { type: "range", min: "0", max: "1000", step: "1", value: "0" });
+  fsSeek.setAttribute("aria-label", "Song position");
+  const fsTotalTime = element("span", "time total", "0:00");
+  const fsProgressRow = element("div", "progress-row");
+  fsProgressRow.append(fsCurrentTime, fsSeek, fsTotalTime);
+  const fsPrevious = iconButton("previous", "skip_previous", null, "Previous");
+  const fsPlay = iconButton("play", "play_arrow", null, "Play (Space)");
+  const fsNext = iconButton("next", "skip_next", null, "Next");
+  const fsTransport = element("div", "transport");
+  fsTransport.append(fsPrevious, fsPlay, fsNext);
+  const fsMute = iconButton("mute", "volume_up", null, "Mute (M)");
+  const fsVolume = element("input", "volume");
+  Object.assign(fsVolume, { type: "range", min: "0", max: "100", step: "1", value: "100" });
+  fsVolume.setAttribute("aria-label", "Volume");
+  const fsWindowFullscreen = iconButton("window-fullscreen", "fullscreen", null, "Full screen (F11)");
+  const fsRight = element("div", "right");
+  fsRight.append(fsMute, fsVolume, fsWindowFullscreen);
+  const fsButtonsRow = element("div", "buttons-row");
+  fsButtonsRow.append(element("div"), fsTransport, fsRight);
+  fsControls.append(fsProgressRow, fsButtonsRow);
+
+  fsOverlay.append(fsBackdrop, fsBackdropSecond, element("div", "shade"), fsHeader, fsViewport, fsEmpty, fsResume, fsControls);
   fullscreenRoot.append(fsStyle, fsOverlay);
 
   let fullscreenOpen = false;
@@ -988,11 +1079,246 @@
   );
   fsResume.onclick = leaveManualScroll;
 
+  // ── Player controls ──
+  let seekingWithSlider = false;
+  let changingVolume = false;
+  let lastProgressUpdate = 0;
+  let progressTimer = 0;
+
+  function formatTime(seconds) {
+    const total = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const rest = String(total % 60).padStart(2, "0");
+    return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
+  }
+
+  function songDuration() {
+    const duration = typeof playerApi.getDuration === "function" ? playerApi.getDuration() : 0;
+    return duration || getVideo()?.duration || 0;
+  }
+
+  function setFill(input, fraction) {
+    input.style.setProperty("--fill", `${(clamp01(fraction) * 100).toFixed(2)}%`);
+  }
+
+  function setIcon(button, icon, title) {
+    button.querySelector("path").setAttribute("d", ICONS[icon]);
+    button.title = title;
+    button.setAttribute("aria-label", title.replace(/\s*\([^)]*\)$/, ""));
+  }
+
+  function updateProgress(force) {
+    if (!fullscreenOpen || seekingWithSlider) return;
+    const now = performance.now();
+    if (!force && (now - lastProgressUpdate < 200 || fsOverlay.classList.contains("idle"))) return;
+    lastProgressUpdate = now;
+    const duration = songDuration();
+    const position = getVideo()?.currentTime ?? 0;
+    fsCurrentTime.textContent = formatTime(position);
+    fsTotalTime.textContent = formatTime(duration);
+    const fraction = duration ? position / duration : 0;
+    fsSeek.value = String(Math.round(fraction * 1000));
+    setFill(fsSeek, fraction);
+  }
+
+  function updatePlayState() {
+    const paused = getVideo()?.paused ?? true;
+    setIcon(fsPlay, paused ? "play_arrow" : "pause", paused ? "Play (Space)" : "Pause (Space)");
+  }
+
+  function currentVolume() {
+    return typeof playerApi.getVolume === "function" ? playerApi.getVolume() : Math.round((getVideo()?.volume ?? 1) * 100);
+  }
+
+  function isMuted() {
+    return typeof playerApi.isMuted === "function" ? playerApi.isMuted() : !!getVideo()?.muted;
+  }
+
+  function updateVolume() {
+    const volume = currentVolume();
+    const muted = isMuted();
+    if (!changingVolume) {
+      fsVolume.value = String(muted ? 0 : volume);
+      setFill(fsVolume, muted ? 0 : volume / 100);
+    }
+    setIcon(fsMute, muted || volume === 0 ? "volume_off" : volume < 50 ? "volume_down" : "volume_up", muted ? "Unmute (M)" : "Mute (M)");
+  }
+
+  // The same way the app's own volume commands do it, so YouTube Music's slider follows
+  function setVolume(volume) {
+    const value = Math.max(0, Math.min(100, Math.round(volume)));
+    playerApi.setVolume(value);
+    ytmStore.dispatch({ type: "SET_VOLUME", payload: value });
+    if (value > 0 && isMuted()) {
+      playerApi.unMute();
+      ytmStore.dispatch({ type: "SET_MUTED", payload: false });
+    }
+    updateVolume();
+  }
+
+  function toggleMute() {
+    const muted = isMuted();
+    if (muted) playerApi.unMute();
+    else playerApi.mute();
+    ytmStore.dispatch({ type: "SET_MUTED", payload: !muted });
+    updateVolume();
+  }
+
+  function togglePlay() {
+    if (getVideo()?.paused) playerApi.playVideo();
+    else playerApi.pauseVideo();
+  }
+
+  function seekBy(seconds) {
+    const position = getVideo()?.currentTime ?? 0;
+    playerApi.seekTo(Math.max(0, Math.min(songDuration() || Infinity, position + seconds)));
+  }
+
+  fsSeek.addEventListener("input", () => {
+    seekingWithSlider = true;
+    const fraction = Number(fsSeek.value) / 1000;
+    fsCurrentTime.textContent = formatTime(fraction * songDuration());
+    setFill(fsSeek, fraction);
+  });
+  fsSeek.addEventListener("change", () => {
+    playerApi.seekTo((Number(fsSeek.value) / 1000) * songDuration());
+    seekingWithSlider = false;
+    updateProgress(true);
+  });
+  fsVolume.addEventListener("input", () => {
+    changingVolume = true;
+    setFill(fsVolume, Number(fsVolume.value) / 100);
+    setVolume(Number(fsVolume.value));
+  });
+  fsVolume.addEventListener("change", () => {
+    changingVolume = false;
+    updateVolume();
+  });
+  fsPlay.onclick = togglePlay;
+  fsPrevious.onclick = () => playerApi.previousVideo();
+  fsNext.onclick = () => playerApi.nextVideo();
+  fsMute.onclick = toggleMute;
+
+  // ── Real full screen (F11) ──
+  // The layer itself goes full screen; the app then fills the whole screen without its title bar
+  function toggleWindowFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    else void fullscreenHost.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+  }
+  fsWindowFullscreen.onclick = toggleWindowFullscreen;
+  document.addEventListener("fullscreenchange", () => {
+    const active = document.fullscreenElement === fullscreenHost;
+    setIcon(fsWindowFullscreen, active ? "fullscreen_exit" : "fullscreen", active ? "Exit full screen (F11)" : "Full screen (F11)");
+  });
+
+  // ── Controls that get out of the way ──
+  const IDLE_AFTER_MS = 2600;
+  let idleTimer = 0;
+  let pointerOnControls = false;
+  let pointerDown = false;
+  let lastPointer = "";
+
+  function controlsHaveKeyboardFocus() {
+    const focused = fullscreenRoot.activeElement;
+    return !!focused && focused.matches(":focus-visible") && (fsControls.contains(focused) || fsHeader.contains(focused));
+  }
+
+  function showControls() {
+    if (!fullscreenOpen) return;
+    if (fsOverlay.classList.contains("idle")) {
+      fsOverlay.classList.remove("idle");
+      updatePlayState();
+      updateVolume();
+      updateProgress(true);
+    }
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(hideControls, IDLE_AFTER_MS);
+  }
+
+  function hideControls(now) {
+    clearTimeout(idleTimer);
+    if (now !== true && (pointerOnControls || pointerDown || controlsHaveKeyboardFocus())) {
+      idleTimer = setTimeout(hideControls, 1200);
+      return;
+    }
+    fsOverlay.classList.add("idle");
+  }
+
+  fsOverlay.addEventListener("pointermove", event => {
+    // Chromium also reports a "move" when the lyrics slide under a mouse that isn't moving
+    const position = `${event.screenX},${event.screenY}`;
+    if (position === lastPointer) return;
+    lastPointer = position;
+    showControls();
+  });
+  fsOverlay.addEventListener("pointerdown", () => {
+    pointerDown = true;
+    showControls();
+  });
+  window.addEventListener("pointerup", () => (pointerDown = false));
+  fsOverlay.addEventListener("wheel", showControls, { passive: true });
+  for (const area of [fsControls, fsHeader]) {
+    area.addEventListener("pointerenter", () => (pointerOnControls = true));
+    area.addEventListener("pointerleave", () => (pointerOnControls = false));
+  }
+  // The mouse left the app, or another window came to the front
+  fsOverlay.addEventListener("pointerleave", () => {
+    pointerOnControls = false;
+    if (!pointerDown) hideControls(true);
+  });
+  window.addEventListener("blur", () => {
+    pointerDown = false;
+    if (fullscreenOpen) hideControls(true);
+  });
+
   function onFullscreenKeydown(event) {
-    if (event.key !== "Escape") return;
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    switch (event.key) {
+      case "Escape":
+        // Out of full screen first, a second Esc closes the lyrics
+        if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+        else closeFullscreen();
+        break;
+      case "F11":
+        toggleWindowFullscreen();
+        break;
+      case " ":
+      case "k":
+      case "K":
+        togglePlay();
+        showControls();
+        break;
+      case "ArrowLeft":
+        seekBy(-5);
+        showControls();
+        break;
+      case "ArrowRight":
+        seekBy(5);
+        showControls();
+        break;
+      case "ArrowUp":
+        setVolume(currentVolume() + 5);
+        showControls();
+        break;
+      case "ArrowDown":
+        setVolume(currentVolume() - 5);
+        showControls();
+        break;
+      case "m":
+      case "M":
+        toggleMute();
+        showControls();
+        break;
+      case "Tab":
+        showControls();
+        return;
+      default:
+        return;
+    }
+    // Handled here, so YouTube Music's own shortcuts don't act on it a second time
     event.preventDefault();
     event.stopPropagation();
-    closeFullscreen();
   }
 
   const resizeObserver = new ResizeObserver(() => layoutFullscreen(true));
@@ -1006,6 +1332,13 @@
     window.addEventListener("keydown", onFullscreenKeydown, true);
     requestAnimationFrame(() => fsOverlay.classList.add("visible"));
     fsViewport.focus({ preventScroll: true });
+    updatePlayState();
+    updateVolume();
+    updateProgress(true);
+    clearInterval(progressTimer);
+    progressTimer = setInterval(() => updateProgress(false), 250);
+    lastPointer = "";
+    showControls();
     kick();
   }
 
@@ -1013,6 +1346,9 @@
     if (!fullscreenOpen) return;
     fullscreenOpen = false;
     fsOverlay.classList.remove("visible");
+    clearInterval(progressTimer);
+    clearTimeout(idleTimer);
+    if (document.fullscreenElement === fullscreenHost) void document.exitFullscreen().catch(() => {});
     resizeObserver.disconnect();
     window.removeEventListener("keydown", onFullscreenKeydown, true);
     setTimeout(() => {

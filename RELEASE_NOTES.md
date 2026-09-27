@@ -1,4 +1,4 @@
-# YouTube Music Premium 2.2.0
+# YouTube Music Premium 2.1.3
 
 Lyrics, redone: word by word, right on time and a lot nicer to watch.
 
@@ -9,6 +9,8 @@ Lyrics, redone: word by word, right on time and a lot nicer to watch.
 - **More songs:** when YouTube Music has no synced lyrics, the app looks them up on LRCLIB and in the AMLL TTML database
 - **Pick the source:** if the lyrics of a song are off, switch between AMLL, LRCLIB and YouTube right above the lyrics; the app remembers your pick for that song
 - **Fullscreen lyrics, redesigned:** the lines move up in a wave, lines further away go soft, three dots count down instrumental breaks, background vocals sit under their line, duets use both sides, and the album art drifts slowly in the background
+- **Fullscreen lyrics get player controls:** song position, previous, play/pause, next, volume and a real full screen mode (F11). The controls and the mouse pointer fade out when the mouse rests or leaves the app
+- Keys in fullscreen lyrics: Space plays and pauses, the arrow keys seek and change the volume, M mutes, F11 goes full screen, Esc leaves it
 - The lyrics tab next to the player gets the same word animation
 - Two new settings under Playback: "Animate word by word" and "More lyrics sources" (only the song title, artist and length are sent to lrclib.net and amll.dev)
 

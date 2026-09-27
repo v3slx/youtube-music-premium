@@ -7,7 +7,7 @@
 **A desktop client for YouTube Music.**
 Mini player, equalizer, word-by-word synced lyrics, a theme that follows your music, listening stats and a command palette.
 
-![Version](https://img.shields.io/badge/Version-2.2.0-e8314c?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-2.1.3-e8314c?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/Windows-x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-44-47848F?style=for-the-badge&logo=electron&logoColor=white)
 ![License](https://img.shields.io/badge/License-GPL--3.0-brightgreen?style=for-the-badge)
@@ -55,6 +55,7 @@ The lyrics follow the song to the millisecond, in the lyrics tab and in fullscre
 - clicking a line jumps to that point in the song
 - scrolling yourself holds the lyrics for a moment, a button brings you back to the current line
 - in fullscreen the lines move in a wave, lines further away go soft, three dots count down instrumental breaks, background vocals sit under their line and duets use both sides
+- fullscreen lyrics have their own player controls with a volume slider and a real full screen mode (**F11**); the controls and the mouse pointer fade out while the mouse rests
 - **font size** and **timing offset** are adjustable and apply instantly
 
 The lyrics come from YouTube Music itself and, for songs it has none for, from [LRCLIB](https://lrclib.net) and the [AMLL TTML database](https://github.com/Steve-xmh/amll-ttml-db), which has hand-made word timing for many songs. When a song's lyrics are off, switch the source right above them; the app remembers the pick for that song. Songs that only have line timing get their word timing estimated. The extra sources can be turned off under **Settings → Playback → More lyrics sources**.
