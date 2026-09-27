@@ -34,6 +34,20 @@ const progressFraction = computed(() => {
 });
 const liked = computed(() => state.value?.likeStatus === 2);
 
+// Drawn icons: the bundled icon font has no pin, and SVG stays sharp at these small sizes
+const icons = {
+  pin: "M16 9V4h1a1 1 0 1 0 0-2H7a1 1 0 0 0 0 2h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z",
+  openApp: "M21 11V3h-8l3.29 3.29-10 10L3 13v8h8l-3.29-3.29 10-10z",
+  close: "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+  previous: "M7 6a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zm11 .87v10.26a1 1 0 0 1-1.55.83L9.2 12.83a1 1 0 0 1 0-1.66l7.25-5.13A1 1 0 0 1 18 6.87z",
+  next: "M17 6a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zM6 6.87v10.26a1 1 0 0 0 1.55.83l7.25-5.13a1 1 0 0 0 0-1.66L7.55 6.04A1 1 0 0 0 6 6.87z",
+  play: "M8 5.14v13.72a1 1 0 0 0 1.52.85l10.29-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z",
+  pause: "M7 5h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm7 0h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z",
+  like: "M9 21h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.58 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2zm0-12 4.34-4.34L12 10h9v2l-3 7H9V9zM1 9h4v12H1z",
+  liked:
+    "M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"
+};
+
 function formatTime(seconds: number) {
   const total = Math.max(0, Math.floor(seconds));
   const hours = Math.floor(total / 3600);
@@ -90,7 +104,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mini-player" :class="{ 'has-video': state?.hasVideo }">
+  <div class="mini-player" :class="{ 'has-video': state?.hasVideo, 'paused': state?.hasVideo && !state.playing }">
     <div v-if="state?.hasVideo && state.thumbnail" class="backdrop" :style="{ backgroundImage: `url(${state.thumbnail})` }" aria-hidden="true"></div>
 
     <div class="window-buttons">
@@ -102,13 +116,13 @@ onBeforeUnmount(() => {
         :aria-pressed="state?.alwaysOnTop ?? false"
         @click="miniPlayer.setAlwaysOnTop(!state?.alwaysOnTop)"
       >
-        <span class="material-symbols-outlined" aria-hidden="true">keep</span>
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="icons.pin" /></svg>
       </button>
       <button type="button" class="icon-button" title="Open YouTube Music Premium" @click="miniPlayer.showMainWindow()">
-        <span class="material-symbols-outlined" aria-hidden="true">open_in_full</span>
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="icons.openApp" /></svg>
       </button>
       <button type="button" class="icon-button" title="Close mini player" @click="miniPlayer.close()">
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="icons.close" /></svg>
       </button>
     </div>
 
@@ -122,13 +136,13 @@ onBeforeUnmount(() => {
         </Transition>
         <div class="controls">
           <button type="button" class="icon-button" title="Previous" @click="miniPlayer.command('previous')">
-            <span class="material-symbols-outlined" aria-hidden="true">skip_previous</span>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="icons.previous" /></svg>
           </button>
           <button type="button" class="play-button" :title="state.playing ? 'Pause' : 'Play'" @click="miniPlayer.command('playPause')">
-            <span class="material-symbols-outlined filled" aria-hidden="true">{{ state.playing ? "pause" : "play_arrow" }}</span>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="state.playing ? icons.pause : icons.play" /></svg>
           </button>
           <button type="button" class="icon-button" title="Next" @click="miniPlayer.command('next')">
-            <span class="material-symbols-outlined" aria-hidden="true">skip_next</span>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="icons.next" /></svg>
           </button>
           <button
             type="button"
@@ -138,7 +152,7 @@ onBeforeUnmount(() => {
             :aria-pressed="liked"
             @click="miniPlayer.command('toggleLike')"
           >
-            <span class="material-symbols-outlined" :class="{ filled: liked }" aria-hidden="true">thumb_up</span>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="liked ? icons.liked : icons.like" /></svg>
           </button>
           <span class="time">
             <template v-if="state.isLive">LIVE</template>
@@ -178,9 +192,9 @@ onBeforeUnmount(() => {
   gap: 14px;
   width: 100vw;
   height: 100vh;
-  padding: 12px 14px 15px 12px;
+  padding: 12px 14px 16px 12px;
   overflow: hidden;
-  background: var(--ytmd-surface);
+  background: var(--ytmd-background);
   color: var(--ytmd-text);
   font-family: "Work Sans", sans-serif;
   user-select: none;
@@ -188,21 +202,27 @@ onBeforeUnmount(() => {
   transition: background-color 600ms ease;
 }
 
+/* The album art, blurred behind everything, with a shade that keeps the text readable */
 .backdrop {
   position: absolute;
-  inset: -40px;
+  inset: -50px;
   background-position: center;
   background-size: cover;
-  filter: blur(32px) saturate(1.3);
-  opacity: 0.35;
+  filter: blur(34px) saturate(1.5);
+  opacity: 0.7;
   pointer-events: none;
+  transition: background-image 600ms ease;
 }
 
 .backdrop::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--ytmd-background) 55%, transparent), var(--ytmd-background));
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--ytmd-background) 30%, transparent),
+    color-mix(in srgb, var(--ytmd-background) 78%, transparent) 62%
+  );
 }
 
 .cover,
@@ -215,11 +235,18 @@ onBeforeUnmount(() => {
 
 .cover {
   flex-shrink: 0;
-  height: min(calc(100vh - 27px), 168px);
+  height: min(calc(100vh - 28px), 168px);
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: 8px;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 40%);
+  border-radius: 10px;
+  box-shadow:
+    0 10px 26px rgb(0 0 0 / 45%),
+    0 0 0 1px rgb(255 255 255 / 8%);
+  transition: transform 450ms cubic-bezier(0.34, 1.35, 0.64, 1);
+}
+
+.paused .cover {
+  transform: scale(0.93);
 }
 
 .details {
@@ -227,7 +254,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-width: 0;
   flex: 1;
-  gap: 2px;
+  gap: 1px;
 }
 
 p {
@@ -238,31 +265,33 @@ p {
 }
 
 .title {
-  padding-right: 88px;
-  font-size: 14px;
-  font-weight: 600;
+  padding-right: 84px;
+  font-size: 14.5px;
+  font-weight: 700;
   line-height: 1.35;
+  letter-spacing: -0.005em;
 }
 
 .subtitle {
-  color: var(--ytmd-muted);
+  color: color-mix(in srgb, var(--ytmd-text) 70%, transparent);
   font-size: 12px;
   line-height: 1.4;
 }
 
 .lyric {
-  margin-top: 2px;
-  color: var(--ytmd-accent);
-  font-size: 12px;
-  font-style: italic;
+  margin-top: 4px;
+  color: var(--ytmd-text);
+  font-size: 12.5px;
+  font-weight: 600;
   line-height: 1.4;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 35%);
 }
 
 .controls {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 button {
@@ -278,23 +307,31 @@ button {
   transition:
     background-color 150ms ease,
     color 150ms ease,
-    transform 100ms ease;
+    opacity 150ms ease,
+    transform 120ms ease;
 }
 
 button:active {
-  transform: scale(0.92);
+  transform: scale(0.9);
+}
+
+.icon {
+  display: block;
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
 }
 
 .icon-button {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  color: var(--ytmd-muted);
+  color: color-mix(in srgb, var(--ytmd-text) 82%, transparent);
 }
 
 .icon-button:hover {
   color: var(--ytmd-text);
-  background: color-mix(in srgb, var(--ytmd-text) 10%, transparent);
+  background: color-mix(in srgb, var(--ytmd-text) 12%, transparent);
 }
 
 .icon-button.active,
@@ -303,35 +340,41 @@ button:active {
 }
 
 .play-button {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   margin: 0 2px;
   border-radius: 50%;
-  color: var(--ytmd-background);
-  background: var(--ytmd-text);
+  color: #111;
+  background: #fff;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 30%);
+}
+
+.play-button .icon {
+  width: 22px;
+  height: 22px;
 }
 
 .play-button:hover {
-  background: color-mix(in srgb, var(--ytmd-text) 85%, var(--ytmd-accent));
+  transform: scale(1.06);
 }
 
-.material-symbols-outlined {
-  font-size: 22px;
-}
-
-.material-symbols-outlined.filled {
-  font-variation-settings: "FILL" 1;
+.play-button:active {
+  transform: scale(0.94);
 }
 
 .time {
   margin-left: auto;
   padding-left: 8px;
-  color: var(--ytmd-muted);
+  color: color-mix(in srgb, var(--ytmd-text) 70%, transparent);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+/*
+  Always there: the top right corner is part of the area that moves the window, and Windows doesn't report the
+  mouse over it, so buttons that only showed on hover disappeared exactly when you reached for them.
+*/
 .window-buttons {
   position: absolute;
   top: 6px;
@@ -339,43 +382,56 @@ button:active {
   z-index: 2;
   display: flex;
   gap: 2px;
-  opacity: 0;
-  transition: opacity 150ms ease;
 }
 
 .window-buttons .icon-button {
   width: 26px;
   height: 26px;
+  color: color-mix(in srgb, var(--ytmd-text) 55%, transparent);
 }
 
-.window-buttons .material-symbols-outlined {
-  font-size: 17px;
+.window-buttons .icon-button:hover {
+  color: var(--ytmd-text);
 }
 
-.mini-player:hover .window-buttons,
-.window-buttons:focus-within {
-  opacity: 1;
+.window-buttons .icon-button.active {
+  color: var(--ytmd-accent);
+}
+
+.window-buttons .icon {
+  width: 16px;
+  height: 16px;
 }
 
 .progress {
   -webkit-app-region: no-drag;
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 12px;
+  right: 12px;
+  bottom: 6px;
   height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
   cursor: pointer;
-  background: color-mix(in srgb, var(--ytmd-text) 14%, transparent);
+  background: color-mix(in srgb, var(--ytmd-text) 18%, transparent);
   transition: height 120ms ease;
 }
 
+/* A taller hit area than the bar itself */
+.progress::before {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+
 .progress:hover {
-  height: 7px;
+  height: 6px;
 }
 
 .progress-fill {
   height: 100%;
-  background: var(--ytmd-accent);
+  border-radius: inherit;
+  background: var(--ytmd-text);
   transform-origin: left center;
 }
 
@@ -399,23 +455,26 @@ button:focus-visible,
 .lyric-enter-active,
 .lyric-leave-active {
   transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+    opacity 220ms ease,
+    transform 220ms ease,
+    filter 220ms ease;
 }
 
 .lyric-enter-from {
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(6px);
+  filter: blur(3px);
 }
 
 .lyric-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translateY(-6px);
+  filter: blur(3px);
 }
 
 @media (max-height: 110px) {
   .cover {
-    height: calc(100vh - 24px);
+    height: calc(100vh - 26px);
   }
   .lyric {
     display: none;
@@ -433,8 +492,8 @@ button:focus-visible,
 
 @media (prefers-reduced-motion: reduce) {
   .mini-player,
+  .cover,
   button,
-  .window-buttons,
   .progress,
   .lyric-enter-active,
   .lyric-leave-active {

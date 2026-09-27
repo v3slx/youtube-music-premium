@@ -6,6 +6,11 @@ Lyrics, redone: word by word, right on time and a lot nicer to watch.
 
 - After a few songs in a row the lyrics could jump to the end and fullscreen lyrics showed a position far past the end of the song (for example 12:50 of 3:22). They now always follow the song itself
 - Leaving full screen (F11) in fullscreen lyrics could leave YouTube Music's page broken, with a tiny cover and a jumpy layout. Full screen now only enlarges the window and no longer touches YouTube Music's own player
+- The mini player's buttons in the top right corner (keep on top, open the app, close) disappeared as soon as the mouse got there, and "keep on top" showed up as the word KEEP. They are always there now, with proper icons
+
+## Mini player
+
+- A fresher look: sharper icons, the album art glowing through the background, the lyrics line fading from one line to the next, and the cover shrinks a little while paused
 
 ## Lyrics
 
