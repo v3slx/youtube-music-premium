@@ -4,8 +4,9 @@ import KeybindInput from "../../components/KeybindInput.vue";
 import YTMDSetting from "../../components/YTMDSetting.vue";
 import SettingsSection from "../../components/SettingsSection.vue";
 import SettingsSearchText from "../../components/SettingsSearchText.vue";
+import EqualizerEditor from "../../components/EqualizerEditor.vue";
 import { provideSettingsSearch } from "../../composables/useSettingsSearch";
-import { StoreSchema, ThemePreset, TrayIconStyle } from "~shared/store/schema";
+import { EQUALIZER_PRESETS, StoreSchema, ThemePreset, TrayIconStyle } from "~shared/store/schema";
 import { AuthToken } from "~shared/integrations/companion-server/types";
 import logo from "~assets/icons/ytmd.png";
 
@@ -66,6 +67,7 @@ const lastFM: StoreSchema["lastfm"] = await store.get("lastfm");
 const disableHardwareAcceleration = ref<boolean>(general.disableHardwareAcceleration);
 const hideToTrayOnClose = ref<boolean>(general.hideToTrayOnClose);
 const showNotificationOnSongChange = ref<boolean>(general.showNotificationOnSongChange);
+const notificationControls = ref<boolean>(general.notificationControls);
 const startOnBoot = ref<boolean>(general.startOnBoot);
 const startMinimized = ref<boolean>(general.startMinimized);
 
@@ -75,6 +77,7 @@ const customCSSPath = ref<string>(appearance.customCSSPath);
 const theme = ref<ThemePreset>(appearance.theme);
 const zoom = ref<number>(appearance.zoom);
 const trayIconStyle = ref<number>(appearance.trayIconStyle);
+const miniPlayerAlwaysOnTop = ref<boolean>(appearance.miniPlayerAlwaysOnTop);
 
 const continueWhereYouLeftOff = ref<boolean>(playback.continueWhereYouLeftOff);
 const continueWhereYouLeftOffPaused = ref<boolean>(playback.continueWhereYouLeftOffPaused);
@@ -85,6 +88,29 @@ const timedLyrics = ref<boolean>(playback.timedLyrics);
 const timedLyricsFontSize = ref<number>(playback.timedLyricsFontSize);
 const timedLyricsOffsetMs = ref<number>(playback.timedLyricsOffsetMs);
 const audioOutputDeviceId = ref<string>(playback.audioOutputDeviceId);
+const equalizerEnabled = ref<boolean>(playback.equalizerEnabled);
+const equalizerPreset = ref<string>(playback.equalizerPreset);
+const equalizerBands = ref<number[]>([...playback.equalizerBands]);
+const volumeLeveling = ref<boolean>(playback.volumeLeveling);
+const pauseOnDeviceDisconnect = ref<boolean>(playback.pauseOnDeviceDisconnect);
+const pauseOnLock = ref<boolean>(playback.pauseOnLock);
+const equalizerPresetOptions = {
+  ...Object.fromEntries(Object.entries(EQUALIZER_PRESETS).map(([id, preset]) => [id, preset.name])),
+  custom: "Custom"
+};
+
+/** Picking a preset moves the sliders; moving a slider yourself makes it "Custom" (or the preset it matches). */
+function equalizerPresetChanged() {
+  const preset = EQUALIZER_PRESETS[equalizerPreset.value];
+  if (preset) equalizerBands.value = [...preset.bands];
+  settingsChanged();
+}
+
+function equalizerBandsChanged() {
+  const matching = Object.entries(EQUALIZER_PRESETS).find(([, preset]) => preset.bands.every((gain, index) => gain === equalizerBands.value[index]));
+  equalizerPreset.value = matching ? matching[0] : "custom";
+  settingsChanged();
+}
 const audioOutputDevices = ref<{ deviceId: string; label: string }[]>([]);
 const audioOutputOptions = computed<Record<string, string>>(() => {
   const options: Record<string, string> = {
@@ -116,6 +142,8 @@ const shortcutThumbsUp = ref<string>(shortcuts.thumbsUp);
 const shortcutThumbsDown = ref<string>(shortcuts.thumbsDown);
 const shortcutVolumeUp = ref<string>(shortcuts.volumeUp);
 const shortcutVolumeDown = ref<string>(shortcuts.volumeDown);
+const shortcutMiniPlayer = ref<string>(shortcuts.miniPlayer);
+const shortcutLyricsFullscreen = ref<string>(shortcuts.lyricsFullscreen);
 
 const lastFMSessionKey = ref<string>(lastFM.sessionKey);
 const scrobblePercent = ref<number>(lastFM.scrobblePercent);
@@ -124,6 +152,7 @@ store.onDidAnyChange(async newState => {
   disableHardwareAcceleration.value = newState.general.disableHardwareAcceleration;
   hideToTrayOnClose.value = newState.general.hideToTrayOnClose;
   showNotificationOnSongChange.value = newState.general.showNotificationOnSongChange;
+  notificationControls.value = newState.general.notificationControls;
   startOnBoot.value = newState.general.startOnBoot;
   startMinimized.value = newState.general.startMinimized;
 
@@ -133,6 +162,7 @@ store.onDidAnyChange(async newState => {
   theme.value = newState.appearance.theme;
   zoom.value = newState.appearance.zoom;
   trayIconStyle.value = newState.appearance.trayIconStyle;
+  miniPlayerAlwaysOnTop.value = newState.appearance.miniPlayerAlwaysOnTop;
 
   continueWhereYouLeftOff.value = newState.playback.continueWhereYouLeftOff;
   continueWhereYouLeftOffPaused.value = newState.playback.continueWhereYouLeftOffPaused;
@@ -143,6 +173,12 @@ store.onDidAnyChange(async newState => {
   timedLyricsFontSize.value = newState.playback.timedLyricsFontSize;
   timedLyricsOffsetMs.value = newState.playback.timedLyricsOffsetMs;
   audioOutputDeviceId.value = newState.playback.audioOutputDeviceId;
+  equalizerEnabled.value = newState.playback.equalizerEnabled;
+  equalizerPreset.value = newState.playback.equalizerPreset;
+  equalizerBands.value = [...newState.playback.equalizerBands];
+  volumeLeveling.value = newState.playback.volumeLeveling;
+  pauseOnDeviceDisconnect.value = newState.playback.pauseOnDeviceDisconnect;
+  pauseOnLock.value = newState.playback.pauseOnLock;
 
   companionServerEnabled.value = newState.integrations.companionServerEnabled;
   companionServerAuthTokens.value = safeStorageAvailable.value
@@ -162,6 +198,8 @@ store.onDidAnyChange(async newState => {
   shortcutThumbsDown.value = newState.shortcuts.thumbsDown;
   shortcutVolumeUp.value = newState.shortcuts.volumeUp;
   shortcutVolumeDown.value = newState.shortcuts.volumeDown;
+  shortcutMiniPlayer.value = newState.shortcuts.miniPlayer;
+  shortcutLyricsFullscreen.value = newState.shortcuts.lyricsFullscreen;
 });
 
 const discordPresenceConnectionFailed = ref<boolean>(await memoryStore.get("discordPresenceConnectionFailed"));
@@ -175,6 +213,8 @@ const shortcutsThumbsUpRegisterFailed = ref<boolean>(await memoryStore.get("shor
 const shortcutsThumbsDownRegisterFailed = ref<boolean>(await memoryStore.get("shortcutsThumbsDownRegisterFailed"));
 const shortcutsVolumeUpRegisterFailed = ref<boolean>(await memoryStore.get("shortcutsVolumeUpRegisterFailed"));
 const shortcutsVolumeDownRegisterFailed = ref<boolean>(await memoryStore.get("shortcutsVolumeDownRegisterFailed"));
+const shortcutsMiniPlayerRegisterFailed = ref<boolean>(await memoryStore.get("shortcutsMiniPlayerRegisterFailed"));
+const shortcutsLyricsFullscreenRegisterFailed = ref<boolean>(await memoryStore.get("shortcutsLyricsFullscreenRegisterFailed"));
 
 const companionServerAuthWindowEnabled = ref<boolean>(await memoryStore.get("companionServerAuthWindowEnabled"));
 
@@ -192,6 +232,8 @@ memoryStore.onStateChanged(newState => {
   shortcutsThumbsDownRegisterFailed.value = newState.shortcutsThumbsDownRegisterFailed;
   shortcutsVolumeUpRegisterFailed.value = newState.shortcutsVolumeUpRegisterFailed;
   shortcutsVolumeDownRegisterFailed.value = newState.shortcutsVolumeDownRegisterFailed;
+  shortcutsMiniPlayerRegisterFailed.value = newState.shortcutsMiniPlayerRegisterFailed;
+  shortcutsLyricsFullscreenRegisterFailed.value = newState.shortcutsLyricsFullscreenRegisterFailed;
 
   companionServerAuthWindowEnabled.value = newState.companionServerAuthWindowEnabled;
 
@@ -207,6 +249,7 @@ async function memorySettingsChanged() {
 async function settingsChanged() {
   store.set("general.hideToTrayOnClose", hideToTrayOnClose.value);
   store.set("general.showNotificationOnSongChange", showNotificationOnSongChange.value);
+  store.set("general.notificationControls", notificationControls.value);
   store.set("general.startOnBoot", startOnBoot.value);
   store.set("general.startMinimized", startMinimized.value);
   store.set("general.disableHardwareAcceleration", disableHardwareAcceleration.value);
@@ -216,6 +259,7 @@ async function settingsChanged() {
   store.set("appearance.theme", theme.value);
   store.set("appearance.zoom", zoom.value);
   store.set("appearance.trayIconStyle", trayIconStyle.value);
+  store.set("appearance.miniPlayerAlwaysOnTop", miniPlayerAlwaysOnTop.value);
 
   store.set("playback.continueWhereYouLeftOff", continueWhereYouLeftOff.value);
   store.set("playback.continueWhereYouLeftOffPaused", continueWhereYouLeftOffPaused.value);
@@ -226,6 +270,13 @@ async function settingsChanged() {
   store.set("playback.timedLyricsFontSize", timedLyricsFontSize.value);
   store.set("playback.timedLyricsOffsetMs", timedLyricsOffsetMs.value);
   store.set("playback.audioOutputDeviceId", audioOutputDeviceId.value);
+  store.set("playback.equalizerEnabled", equalizerEnabled.value);
+  store.set("playback.equalizerPreset", equalizerPreset.value);
+  // A plain copy: the reactive array itself can't be sent to the main process
+  store.set("playback.equalizerBands", [...equalizerBands.value]);
+  store.set("playback.volumeLeveling", volumeLeveling.value);
+  store.set("playback.pauseOnDeviceDisconnect", pauseOnDeviceDisconnect.value);
+  store.set("playback.pauseOnLock", pauseOnLock.value);
 
   store.set("integrations.companionServerEnabled", companionServerEnabled.value);
   store.set("integrations.companionServerCORSWildcardEnabled", companionServerCORSWildcardEnabled.value);
@@ -241,6 +292,8 @@ async function settingsChanged() {
   store.set("shortcuts.thumbsDown", shortcutThumbsDown.value);
   store.set("shortcuts.volumeUp", shortcutVolumeUp.value);
   store.set("shortcuts.volumeDown", shortcutVolumeDown.value);
+  store.set("shortcuts.miniPlayer", shortcutMiniPlayer.value);
+  store.set("shortcuts.lyricsFullscreen", shortcutLyricsFullscreen.value);
 }
 
 async function settingChangedRequiresRestart() {
@@ -405,7 +458,24 @@ window.ytmd.handleUpdateDownloaded(() => {
           class="general-tab"
         >
           <YTMDSetting v-if="!isDarwin" v-model="hideToTrayOnClose" type="checkbox" name="Hide to tray on close" @change="settingsChanged" />
-          <YTMDSetting v-model="showNotificationOnSongChange" type="checkbox" name="Show notification on song change" @change="settingsChanged" />
+          <YTMDSetting
+            v-model="showNotificationOnSongChange"
+            type="checkbox"
+            name="Show notification on song change"
+            description="With the album art. Not shown while the app window is in front."
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="showNotificationOnSongChange || searching"
+            v-model="notificationControls"
+            :disabled="!showNotificationOnSongChange"
+            disabled-message="Enable Show notification on song change in General to change this setting."
+            type="checkbox"
+            indented
+            name="Playback buttons in the notification"
+            description="Previous, pause and next right in the notification."
+            @change="settingsChanged"
+          />
           <YTMDSetting v-model="startOnBoot" type="checkbox" name="Start on boot" @change="settingsChanged" />
           <!--<div class="setting">
             <p>Start minimized</p>
@@ -422,14 +492,22 @@ window.ytmd.handleUpdateDownloaded(() => {
               [ThemePreset.Default]: 'Standard (YouTube Music)',
               [ThemePreset.Midnight]: 'Midnight',
               [ThemePreset.Ocean]: 'Ocean',
-              [ThemePreset.Forest]: 'Forest'
+              [ThemePreset.Forest]: 'Forest',
+              [ThemePreset.Dynamic]: 'Dynamic (from the album art)'
             }"
             type="select"
             name="Theme"
-            description="Standard, Midnight, Ocean or Forest. Applies to the player and settings. Custom CSS is available in Advanced."
+            description="Standard, Midnight, Ocean, Forest or Dynamic, which takes its colours from the album art of the song that is playing. Applies to the player and all windows. Custom CSS is available in Advanced."
             @change="settingsChanged"
           />
           <YTMDSetting v-model="zoom" type="range" max="300" min="30" step="10" name="Zoom" @change="settingsChanged" />
+          <YTMDSetting
+            v-model="miniPlayerAlwaysOnTop"
+            type="checkbox"
+            name="Keep the mini player on top"
+            description="The mini player opens from the title bar, the tray or its shortcut and stays above other windows."
+            @change="settingsChanged"
+          />
           <YTMDSetting
             v-if="isLinux"
             v-model="trayIconStyle"
@@ -511,6 +589,49 @@ window.ytmd.handleUpdateDownloaded(() => {
           >
             <div class="audio-output-actions"><button @click="refreshAudioOutputDevices">Refresh devices</button></div>
           </YTMDSetting>
+          <YTMDSetting
+            v-model="pauseOnDeviceDisconnect"
+            type="checkbox"
+            name="Pause when headphones are disconnected"
+            description="Pauses instead of carrying on through the speakers when the device that is playing goes away."
+            @change="settingsChanged"
+          />
+          <YTMDSetting v-model="pauseOnLock" type="checkbox" name="Pause when the PC is locked" @change="settingsChanged" />
+          <YTMDSetting
+            v-model="equalizerEnabled"
+            type="checkbox"
+            name="Equalizer"
+            description="Ten bands with presets such as bass boost, vocal and late night."
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="equalizerEnabled || searching"
+            v-model="equalizerPreset"
+            :disabled="!equalizerEnabled"
+            disabled-message="Enable Equalizer in Playback to change this setting."
+            :options-map="equalizerPresetOptions"
+            type="select"
+            indented
+            name="Equalizer preset"
+            @change="equalizerPresetChanged"
+          />
+          <YTMDSetting
+            v-if="equalizerEnabled"
+            type="custom"
+            flex-column
+            indented
+            name="Equalizer bands"
+            description="Move a band to shape the sound yourself, hover it to see the value."
+          >
+            <EqualizerEditor v-model="equalizerBands" @change="equalizerBandsChanged" />
+          </YTMDSetting>
+          <YTMDSetting
+            v-model="volumeLeveling"
+            type="checkbox"
+            name="Volume leveling"
+            description="Evens out quiet and loud passages and songs, handy for playlists that mix old and new recordings."
+            @change="settingsChanged"
+          />
         </SettingsSection>
 
         <SettingsSection
@@ -770,6 +891,32 @@ window.ytmd.handleUpdateDownloaded(() => {
               </span>
             </template>
             <KeybindInput v-model="shortcutVolumeDown" @change="settingsChanged" />
+          </YTMDSetting>
+          <YTMDSetting type="custom" name="Mini player">
+            <template #name>
+              <span class="shortcut-title"
+                ><SettingsSearchText text="Mini player" :query="query" /><span
+                  v-if="shortcutsMiniPlayerRegisterFailed"
+                  class="material-symbols-outlined register-error"
+                  title="Failed to register keybind. Does another application have this keybind?"
+                  >error</span
+                >
+              </span>
+            </template>
+            <KeybindInput v-model="shortcutMiniPlayer" @change="settingsChanged" />
+          </YTMDSetting>
+          <YTMDSetting type="custom" name="Fullscreen lyrics">
+            <template #name>
+              <span class="shortcut-title"
+                ><SettingsSearchText text="Fullscreen lyrics" :query="query" /><span
+                  v-if="shortcutsLyricsFullscreenRegisterFailed"
+                  class="material-symbols-outlined register-error"
+                  title="Failed to register keybind. Does another application have this keybind?"
+                  >error</span
+                >
+              </span>
+            </template>
+            <KeybindInput v-model="shortcutLyricsFullscreen" @change="settingsChanged" />
           </YTMDSetting>
         </SettingsSection>
 

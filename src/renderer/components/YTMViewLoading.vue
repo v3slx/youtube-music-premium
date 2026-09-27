@@ -44,7 +44,7 @@ memoryStore.onStateChanged(newState => {
   <main class="ytmview-loading-container" aria-label="YouTube Music connection">
     <Transition name="fade">
       <section v-if="ytmViewLoading" class="ytmview-loading" aria-labelledby="loading-title">
-        <img class="logo" :src="logo" alt="YouTube Music Desktop" width="72" height="72" />
+        <img class="logo" :src="logo" alt="YouTube Music Premium" width="72" height="72" />
         <div class="loading-message" role="status" aria-live="polite" aria-atomic="true">
           <h1 id="loading-title">{{ loadingTitle }}</h1>
           <p v-if="ytmViewLoadingError" class="loading-description">Check your internet connection, then try again.</p>

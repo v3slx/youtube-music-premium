@@ -18,6 +18,7 @@ import getPlaylistsScript from "./scripts/getplaylists.script?raw";
 import toggleLikeScript from "./scripts/togglelike.script?raw";
 import toggleDislikeScript from "./scripts/toggledislike.script?raw";
 import timedLyricsScript from "./scripts/timedlyrics.script?raw";
+import equalizerScript from "./scripts/equalizer.script?raw";
 
 const store = new Store<StoreSchema>();
 
@@ -29,7 +30,8 @@ contextBridge.exposeInMainWorld("ytmd", {
   sendStoreUpdate: (queueState: unknown, likeStatus: string, volume: number, muted: boolean, adPlaying: boolean) =>
     ipcRenderer.send("ytmView:storeStateChanged", queueState, likeStatus, volume, muted, adPlaying),
   sendCreatePlaylistObservation: (playlist: unknown) => ipcRenderer.send("ytmView:createPlaylistObserved", playlist),
-  sendDeletePlaylistObservation: (playlistId: string) => ipcRenderer.send("ytmView:deletePlaylistObserved", playlistId)
+  sendDeletePlaylistObservation: (playlistId: string) => ipcRenderer.send("ytmView:deletePlaylistObserved", playlistId),
+  sendLyricsLine: (line: string | null) => ipcRenderer.send("ytmView:lyricsLine", typeof line === "string" ? line.slice(0, 300) : null)
 });
 
 function createStyleSheet() {
@@ -128,6 +130,30 @@ function createStyleSheet() {
       /* Keeps the "Sync to video time" button positioned above the lyrics */
       .ytmusic-tab-renderer[page-type='MUSIC_PAGE_TYPE_TRACK_LYRICS'] > #contents {
         position: relative;
+      }
+
+      .ytmd-lyrics-fullscreen-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        margin: 0 4px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        color: rgba(255, 255, 255, 0.7);
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .ytmd-lyrics-fullscreen-button:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .ytmd-lyrics-fullscreen-button .material-symbols-outlined {
+        font-size: 24px;
       }
 
       .ytmd-lyrics-return-live-container {
@@ -264,6 +290,64 @@ async function applyTimedLyricsSettings(playback: StoreSchema["playback"]) {
   )(playback.timedLyrics, playback.timedLyricsOffsetMs, playback.timedLyricsFontSize);
 }
 
+async function addEqualizer() {
+  (await webFrame.executeJavaScript(equalizerScript))();
+}
+
+async function applyEqualizerSettings(playback: StoreSchema["playback"]) {
+  (
+    await webFrame.executeJavaScript(`
+      (function(enabled, bands, leveling) {
+        if (window.__YTMD_EQUALIZER__) window.__YTMD_EQUALIZER__.update({ enabled, bands, leveling });
+      })
+    `)
+  )(playback.equalizerEnabled, playback.equalizerBands, playback.volumeLeveling);
+}
+
+async function pausePlayback() {
+  (
+    await webFrame.executeJavaScript(`
+      (function() {
+        const playerBar = document.querySelector("ytmusic-app-layout>ytmusic-player-bar");
+        if (playerBar && playerBar.playing) window.__YTMD_HOOK__.ytmPlayerBar.playerApi.pauseVideo();
+      })
+    `)
+  )();
+}
+
+/**
+ * Pauses when the audio device that is playing goes away - headphones unplugged or a Bluetooth headset
+ * turned off - instead of carrying on through the speakers. With "System default" that shows as the default
+ * device changing while a device disappears, with a chosen device as that device disappearing.
+ */
+async function watchOutputDevices() {
+  const outputs = async () => (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === "audiooutput");
+  let known = await outputs().catch((): MediaDeviceInfo[] => []);
+
+  navigator.mediaDevices.addEventListener("devicechange", async () => {
+    const current = await outputs().catch((): MediaDeviceInfo[] => []);
+    const previous = known;
+    known = current;
+
+    const playback = await store.get("playback");
+    if (!playback.pauseOnDeviceDisconnect) return;
+
+    const removed = previous.filter(device => !current.some(entry => entry.deviceId === device.deviceId));
+    if (!removed.length) return;
+
+    const sinkId = playback.audioOutputDeviceId || "default";
+    const lostChosenDevice = sinkId !== "default" && removed.some(device => device.deviceId === sinkId);
+    const defaultBefore = previous.find(device => device.deviceId === "default")?.label;
+    const defaultNow = current.find(device => device.deviceId === "default")?.label;
+    const lostDefaultDevice = sinkId === "default" && !!defaultBefore && defaultBefore !== defaultNow;
+
+    if (lostChosenDevice || lostDefaultDevice) {
+      console.log("YTMD: the audio output device was disconnected, pausing");
+      await pausePlayback();
+    }
+  });
+}
+
 async function hideChromecastButton() {
   (
     await webFrame.executeJavaScript(`
@@ -312,6 +396,7 @@ async function applyAudioOutputDevice(deviceId: string) {
       }
 
       window.__YTMD_AUDIO_OUTPUT__ = output;
+      if (window.__YTMD_EQUALIZER__) window.__YTMD_EQUALIZER__.setSinkId(sinkId);
       await Promise.all([...document.querySelectorAll("audio, video")].map(media => output.apply(media)));
     })()
   `);
@@ -418,9 +503,12 @@ window.addEventListener("load", async () => {
   await hookPlayerApiEvents();
   overrideHistoryButtonDisplay();
   const playbackSettings = await store.get("playback");
+  await addEqualizer();
   await applyAudioOutputDevice(playbackSettings.audioOutputDeviceId);
+  await applyEqualizerSettings(playbackSettings);
   await applyTimedLyricsSettings(playbackSettings);
   await addTimedLyrics();
+  void watchOutputDevices();
 
   const integrationScripts: { [integrationName: string]: { [scriptName: string]: string } } = await ipcRenderer.invoke("ytmView:getIntegrationScripts");
 
@@ -717,6 +805,17 @@ window.addEventListener("load", async () => {
         break;
       }
 
+      case "toggleLyricsFullscreen": {
+        (
+          await webFrame.executeJavaScript(`
+            (function() {
+              if (window.__YTMD_TIMED_LYRICS__) window.__YTMD_TIMED_LYRICS__.toggleFullscreen();
+            })
+          `)
+        )();
+        break;
+      }
+
       case "navigate": {
         const endpoint = value;
         document.dispatchEvent(
@@ -759,6 +858,7 @@ window.addEventListener("load", async () => {
     }
 
     void applyAudioOutputDevice(newState.playback.audioOutputDeviceId);
+    void applyEqualizerSettings(newState.playback);
     void applyTimedLyricsSettings(newState.playback);
   });
 

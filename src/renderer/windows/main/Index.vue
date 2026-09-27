@@ -27,7 +27,16 @@ onMounted(() => {
 <template>
   <div ref="keyboardFocusZero" tabindex="0"></div>
   <Suspense>
-    <TitleBar is-main-window has-home-button has-settings-button has-minimize-button has-maximize-button title="YouTube Music Premium" :icon-file="logo" />
+    <TitleBar
+      is-main-window
+      has-home-button
+      has-mini-player-button
+      has-settings-button
+      has-minimize-button
+      has-maximize-button
+      title="YouTube Music Premium"
+      :icon-file="logo"
+    />
   </Suspense>
   <Suspense>
     <YTMViewLoading />

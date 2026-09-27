@@ -109,6 +109,11 @@ const config: ForgeConfig = {
           target: "preload"
         },
         {
+          entry: "src/renderer/windows/mini-player/preload.ts",
+          config: "viteconfig/preload/mini_player_window.ts",
+          target: "preload"
+        },
+        {
           entry: "src/renderer/ytmview/preload.ts",
           config: "viteconfig/preload/ytmview.ts",
           target: "preload"

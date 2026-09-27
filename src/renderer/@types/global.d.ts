@@ -1,4 +1,4 @@
-import { WindowsEventArguments } from "~shared/types";
+import { MiniPlayerState, WindowsEventArguments } from "~shared/types";
 import Store from "../store-ipc/store";
 import { StoreSchema, MemoryStoreSchema } from "~shared/store/schema";
 import MemoryStore from "../store-ipc/memory-store";
@@ -29,6 +29,17 @@ declare global {
 
       // Main window specific
       switchFocus(context: "main" | "ytm"): void;
+      toggleMiniPlayer(): void;
+
+      // Mini player specific
+      miniPlayer: {
+        onState(callback: (state: MiniPlayerState) => void): void;
+        requestState(): void;
+        command(command: "playPause" | "next" | "previous" | "toggleLike" | "toggleDislike" | "seekTo", value?: number): void;
+        setAlwaysOnTop(alwaysOnTop: boolean): void;
+        showMainWindow(): void;
+        close(): void;
+      };
 
       // YTM view specific
       ytmViewNavigateDefault(): void;

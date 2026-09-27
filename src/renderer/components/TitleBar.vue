@@ -18,6 +18,7 @@ const props = defineProps({
     default: null
   },
   hasHomeButton: Boolean,
+  hasMiniPlayerButton: Boolean,
   hasSettingsButton: Boolean,
   hasMinimizeButton: Boolean,
   hasMaximizeButton: Boolean,
@@ -34,6 +35,7 @@ const restoreWindow = window.ytmd.restoreWindow;
 const closeWindow = window.ytmd.closeWindow;
 
 const openSettingsWindow = window.ytmd.openSettingsWindow;
+const toggleMiniPlayer = window.ytmd.toggleMiniPlayer;
 const navigateToDefault = window.ytmd.ytmViewNavigateDefault;
 
 const wcoVisible = ref(window.navigator.windowControlsOverlay.visible);
@@ -101,6 +103,17 @@ if (props.isMainWindow) {
         <slot name="app-buttons"></slot>
         <button v-if="hasHomeButton" type="button" class="app-button" tabindex="2" title="Home" aria-label="Home" @click="navigateToDefault">
           <span class="material-symbols-outlined" aria-hidden="true">home</span>
+        </button>
+        <button
+          v-if="hasMiniPlayerButton"
+          type="button"
+          class="app-button"
+          tabindex="3"
+          title="Mini player"
+          aria-label="Open or close the mini player"
+          @click="toggleMiniPlayer"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">picture_in_picture_alt</span>
         </button>
         <button v-if="hasSettingsButton" type="button" class="app-button" tabindex="3" title="Settings" aria-label="Settings" @click="openSettingsWindow">
           <span class="material-symbols-outlined" aria-hidden="true">settings</span>

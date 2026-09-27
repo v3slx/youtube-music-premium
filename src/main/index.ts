@@ -12,6 +12,7 @@ import {
   MenuItemConstructorOptions,
   nativeImage,
   nativeTheme,
+  powerMonitor,
   safeStorage,
   screen,
   session,
@@ -26,8 +27,10 @@ import { existsSync } from "fs";
 import electronSquirrelStartup from "electron-squirrel-startup";
 
 import MemoryStore from "./memory-store";
-import playerStateStore, { PlayerState, VideoState } from "./player-state-store";
-import { MemoryStoreSchema, StoreSchema, ThemePreset, TrayIconStyle } from "../shared/store/schema";
+import playerStateStore, { PlayerState, Thumbnail, VideoState } from "./player-state-store";
+import { MiniPlayerState } from "../shared/types";
+import { MemoryStoreSchema, StoreSchema, ThemePalette, ThemePreset, TrayIconStyle } from "../shared/store/schema";
+import { paletteFromThumbnails } from "./dynamic-palette";
 
 import CompanionServer from "./integrations/companion-server";
 import CustomCSS from "./integrations/custom-css";
@@ -193,6 +196,7 @@ const ytmViewIntegrationScripts: { [name: string]: { [name: string]: string } } 
 
 let mainWindow: BrowserWindow = null;
 let settingsWindow: BrowserWindow = null;
+let miniPlayerWindow: BrowserWindow = null;
 let ytmView: BrowserView = null;
 let tray: Tray = null;
 let trayContextMenu = null;
@@ -211,7 +215,9 @@ if (!gotTheLock) {
   app.exit(0);
 } else {
   app.on("second-instance", (_, commandLine) => {
-    if (mainWindow) {
+    const url = commandLine[commandLine.length - 1] ?? "";
+    // The notification's playback buttons control the player without pulling the window to the front
+    if (!url.startsWith("ytmd://control/") && mainWindow) {
       mainWindow.show();
       if (mainWindow.isMinimized()) {
         mainWindow.restore();
@@ -219,7 +225,7 @@ if (!gotTheLock) {
       mainWindow.focus();
     }
 
-    handleProtocol(commandLine[commandLine.length - 1]);
+    handleProtocol(url);
   });
 }
 
@@ -231,6 +237,17 @@ function handleProtocol(url: string) {
     const paths = urlPaths.split("/");
     if (paths.length > 0) {
       switch (paths[0]) {
+        case "control": {
+          const command = paths[1];
+          if (ytmView && ["playPause", "next", "previous"].includes(command)) {
+            ytmView.webContents.send("remoteControl:execute", command);
+          }
+          break;
+        }
+        case "focus": {
+          showMainWindow();
+          break;
+        }
         case "play": {
           if (paths.length >= 2) {
             const videoId = paths[1];
@@ -274,6 +291,10 @@ memoryStore.onStateChanged((newState, oldState) => {
 
   if (settingsWindow !== null) {
     settingsWindow.webContents.send("memoryStore:stateChanged", newState, oldState);
+  }
+
+  if (miniPlayerWindow !== null) {
+    miniPlayerWindow.webContents.send("memoryStore:stateChanged", newState, oldState);
   }
 
   if (ytmView !== null) {
@@ -344,11 +365,35 @@ const titleBarColors: Record<ThemePreset, string> = {
   [ThemePreset.Default]: "#111111",
   [ThemePreset.Midnight]: "#110f1b",
   [ThemePreset.Ocean]: "#071921",
-  [ThemePreset.Forest]: "#0f1a12"
+  [ThemePreset.Forest]: "#0f1a12",
+  [ThemePreset.Dynamic]: "#111111"
 };
 
+// The dynamic theme's current colours (from the album art of the song that is playing)
+let dynamicPalette: ThemePalette | null = null;
+let dynamicPaletteSource: string | null = null;
+
 function titleBarOverlayFor(theme: ThemePreset) {
-  return { color: titleBarColors[theme] ?? titleBarColors[ThemePreset.Default], symbolColor: "#BBBBBB", height: 36 };
+  const color = theme === ThemePreset.Dynamic && dynamicPalette ? dynamicPalette.background : (titleBarColors[theme] ?? titleBarColors[ThemePreset.Default]);
+  return { color, symbolColor: "#BBBBBB", height: 36 };
+}
+
+/** Recolours everything for the song that is playing, when the dynamic theme is selected. */
+function updateDynamicPalette(state: PlayerState) {
+  if (store.get("appearance").theme !== ThemePreset.Dynamic) return;
+  const thumbnails = state.videoDetails?.thumbnails;
+  if (!thumbnails?.length) return;
+  // The first data of a song can come without the album art, so the art decides - not only the song
+  const source = `${state.videoDetails.id}:${thumbnails[0].url}`;
+  if (source === dynamicPaletteSource) return;
+  dynamicPaletteSource = source;
+  void paletteFromThumbnails(thumbnails).then(palette => {
+    if (!palette || source !== dynamicPaletteSource) return;
+    dynamicPalette = palette;
+    builtInTheme.setDynamicPalette(palette);
+    memoryStore.set("dynamicPalette", palette);
+    applyTitleBarTheme(ThemePreset.Dynamic);
+  });
 }
 
 function applyTitleBarTheme(theme: ThemePreset) {
@@ -373,6 +418,8 @@ function anyShortcutChanged(newState: Readonly<StoreSchema>, oldState: Readonly<
   if (newState.shortcuts.thumbsUp !== oldState.shortcuts.thumbsUp) return true;
   if (newState.shortcuts.volumeDown !== oldState.shortcuts.volumeDown) return true;
   if (newState.shortcuts.volumeUp !== oldState.shortcuts.volumeUp) return true;
+  if (newState.shortcuts.miniPlayer !== oldState.shortcuts.miniPlayer) return true;
+  if (newState.shortcuts.lyricsFullscreen !== oldState.shortcuts.lyricsFullscreen) return true;
 
   return false;
 }
@@ -391,6 +438,8 @@ const store = new Conf<StoreSchema>({
       disableHardwareAcceleration: false,
       hideToTrayOnClose: false,
       showNotificationOnSongChange: false,
+      notificationControls: true,
+      listeningStats: true,
       startOnBoot: false,
       startMinimized: false
     },
@@ -400,7 +449,8 @@ const store = new Conf<StoreSchema>({
       customCSSPath: null,
       theme: ThemePreset.Default,
       zoom: 100,
-      trayIconStyle: TrayIconStyle.Auto
+      trayIconStyle: TrayIconStyle.Auto,
+      miniPlayerAlwaysOnTop: true
     },
     playback: {
       continueWhereYouLeftOff: true,
@@ -411,7 +461,13 @@ const store = new Conf<StoreSchema>({
       audioOutputDeviceId: "default",
       timedLyrics: true,
       timedLyricsFontSize: 24,
-      timedLyricsOffsetMs: 0
+      timedLyricsOffsetMs: 0,
+      equalizerEnabled: false,
+      equalizerPreset: "flat",
+      equalizerBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      volumeLeveling: false,
+      pauseOnDeviceDisconnect: true,
+      pauseOnLock: false
     },
     integrations: {
       companionServerEnabled: false,
@@ -428,14 +484,18 @@ const store = new Conf<StoreSchema>({
       thumbsUp: "",
       thumbsDown: "",
       volumeUp: "",
-      volumeDown: ""
+      volumeDown: "",
+      miniPlayer: "",
+      lyricsFullscreen: ""
     },
     state: {
       lastUrl: "https://music.youtube.com/",
       lastPlaylistId: "",
       lastVideoId: "",
       windowBounds: null,
-      windowMaximized: false
+      windowMaximized: false,
+      miniPlayerBounds: null,
+      lastSeenVersion: null
     },
     lastfm: {
       // Last FM Keys belong to @Alipoodle
@@ -503,6 +563,32 @@ const store = new Conf<StoreSchema>({
       if (store.get("integrations.discordPresenceClientId") === "1143202598460076053") {
         store.set("integrations.discordPresenceClientId", "1548008608577364078");
       }
+    },
+    ">=2.1.0": store => {
+      // Everything new in 2.1.0 gets its default, nothing that exists is changed
+      const defaults: [string, unknown][] = [
+        ["general.notificationControls", true],
+        ["general.listeningStats", true],
+        ["appearance.miniPlayerAlwaysOnTop", true],
+        ["playback.equalizerEnabled", false],
+        ["playback.equalizerPreset", "flat"],
+        ["playback.equalizerBands", [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+        ["playback.volumeLeveling", false],
+        ["playback.pauseOnDeviceDisconnect", true],
+        ["playback.pauseOnLock", false],
+        ["shortcuts.miniPlayer", ""],
+        ["shortcuts.lyricsFullscreen", ""],
+        ["state.miniPlayerBounds", null]
+      ];
+      for (const [key, value] of defaults) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore The migration store is typed by the schema, the keys above are valid paths in it
+        if (!store.has(key)) store.set(key, value);
+      }
+      // Updating from an earlier version: "What's new" shows once (fresh installs skip it)
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      if (!store.has("state.lastSeenVersion")) store.set("state.lastSeenVersion", "2.0.0");
     }
   }
 });
@@ -513,6 +599,14 @@ store.onDidAnyChange(async (newState, oldState) => {
 
   if (settingsWindow !== null) {
     settingsWindow.webContents.send("settings:stateChanged", newState, oldState);
+  }
+
+  if (miniPlayerWindow !== null) {
+    miniPlayerWindow.webContents.send("settings:stateChanged", newState, oldState);
+    if (newState.appearance.miniPlayerAlwaysOnTop !== oldState.appearance.miniPlayerAlwaysOnTop) {
+      miniPlayerWindow.setAlwaysOnTop(newState.appearance.miniPlayerAlwaysOnTop);
+      sendMiniPlayerState(true);
+    }
   }
 
   if (ytmView !== null) {
@@ -528,6 +622,7 @@ store.onDidAnyChange(async (newState, oldState) => {
 
   // General
   if (newState.general.showNotificationOnSongChange && !oldState.general.showNotificationOnSongChange) {
+    nowPlayingNotifications.provide(store, () => !!mainWindow && mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused());
     nowPlayingNotifications.enable();
     log.info("Integration enabled: Now playing notifications");
   } else if (!newState.general.showNotificationOnSongChange && oldState.general.showNotificationOnSongChange) {
@@ -557,6 +652,11 @@ store.onDidAnyChange(async (newState, oldState) => {
     builtInTheme.provide(ytmView);
     builtInTheme.setTheme(newState.appearance.theme);
     applyTitleBarTheme(newState.appearance.theme);
+    if (newState.appearance.theme === ThemePreset.Dynamic) {
+      // Colour the current song right away instead of waiting for the next one
+      dynamicPaletteSource = null;
+      updateDynamicPalette(playerStateStore.getState());
+    }
     log.info("Appearance update: Theme preset");
   }
   if (oldState.appearance.trayIconStyle !== newState.appearance.trayIconStyle) setTrayIcon();
@@ -976,7 +1076,44 @@ function registerShortcuts() {
     memoryStore.set("shortcutsVolumeDownRegisterFailed", false);
   }
 
+  registerShortcut(shortcuts.miniPlayer, "shortcutsMiniPlayerRegisterFailed", "miniPlayer", toggleMiniPlayer);
+  registerShortcut(shortcuts.lyricsFullscreen, "shortcutsLyricsFullscreenRegisterFailed", "lyricsFullscreen", toggleLyricsFullscreen);
+
   log.info("Registered shortcuts");
+}
+
+function registerShortcut(accelerator: string, failedKey: keyof MemoryStoreSchema, name: string, action: () => void) {
+  if (!accelerator) {
+    memoryStore.set(failedKey, false);
+    return;
+  }
+  let registered = false;
+  try {
+    registered = globalShortcut.register(accelerator, action);
+  } catch {
+    /* an invalid accelerator counts as not registered */
+  }
+  log.info(registered ? `Registered shortcut: ${name}` : `Failed to register shortcut: ${name}`);
+  memoryStore.set(failedKey, !registered);
+}
+
+function showMainWindow() {
+  if (!mainWindow) return;
+  mainWindow.show();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+}
+
+/** Fullscreen lyrics live in the YouTube Music view, so the main window comes to the front for them. */
+function toggleLyricsFullscreen() {
+  if (!ytmView) return;
+  showMainWindow();
+  ytmView.webContents.send("remoteControl:execute", "toggleLyricsFullscreen");
+}
+
+/** The app's own windows (not the YouTube Music view or a companion authorization window). */
+function isAppWindow(sender: Electron.WebContents) {
+  return [mainWindow, settingsWindow, miniPlayerWindow].some(window => window && !window.isDestroyed() && window.webContents === sender);
 }
 
 // Functions which call to mainWindow renderer
@@ -1101,6 +1238,126 @@ const createOrShowSettingsWindow = (): void => {
   if (ALL_WINDOWS_VITE_DEV_SERVER_URL) settingsWindow.loadURL(ALL_WINDOWS_VITE_DEV_SERVER_URL + "/windows/settings/index.html");
   else settingsWindow.loadFile(path.join(__dirname, `../renderer/windows/settings/index.html`));
 };
+
+//#region Mini player
+let currentLyricsLine: string | null = null;
+let lastMiniPlayerKey = "";
+let lastMiniPlayerSent = { progress: 0, at: 0, playing: false };
+
+/** The smallest thumbnail that still looks sharp at the given size. */
+function pickThumbnail(thumbnails: Thumbnail[] | undefined, minWidth: number): string | null {
+  if (!thumbnails?.length) return null;
+  const sorted = [...thumbnails].sort((a, b) => a.width - b.width);
+  return (sorted.find(thumbnail => thumbnail.width >= minWidth) ?? sorted[sorted.length - 1]).url;
+}
+
+function miniPlayerState(): MiniPlayerState {
+  const state = playerStateStore.getState();
+  const details = state.videoDetails;
+  return {
+    hasVideo: !!details,
+    videoId: details?.id ?? null,
+    title: details?.title ?? "",
+    author: details?.author ?? "",
+    album: details?.album ?? null,
+    thumbnail: pickThumbnail(details?.thumbnails, 240),
+    durationSeconds: details?.durationSeconds || 0,
+    progress: state.videoProgress ?? 0,
+    progressAt: Date.now(),
+    playing: state.trackState === VideoState.Playing,
+    likeStatus: details?.likeStatus ?? -1,
+    isLive: details?.isLive ?? false,
+    lyricsLine: currentLyricsLine,
+    alwaysOnTop: store.get("appearance").miniPlayerAlwaysOnTop
+  };
+}
+
+/**
+ * The window counts the progress on by itself, so a plain progress tick only goes out every few seconds as a
+ * correction - everything else (song, play state, like, lyrics line, a seek) right away.
+ */
+function sendMiniPlayerState(force = false) {
+  if (!miniPlayerWindow || miniPlayerWindow.isDestroyed()) return;
+  const state = miniPlayerState();
+  const key = [state.videoId, state.title, state.thumbnail, state.playing, state.likeStatus, state.lyricsLine, state.alwaysOnTop, state.durationSeconds].join(
+    "|"
+  );
+  const now = Date.now();
+  const expected = lastMiniPlayerSent.progress + (lastMiniPlayerSent.playing ? (now - lastMiniPlayerSent.at) / 1000 : 0);
+  const jumped = Math.abs(state.progress - expected) > 1.5;
+  if (!force && key === lastMiniPlayerKey && !jumped && now - lastMiniPlayerSent.at < 5000) return;
+  lastMiniPlayerKey = key;
+  lastMiniPlayerSent = { progress: state.progress, at: now, playing: state.playing };
+  miniPlayerWindow.webContents.send("miniPlayer:state", state);
+}
+
+function toggleMiniPlayer() {
+  if (miniPlayerWindow) {
+    miniPlayerWindow.close();
+    return;
+  }
+
+  const savedBounds = store.get("state").miniPlayerBounds;
+  const workArea = screen.getPrimaryDisplay().workArea;
+  const width = savedBounds?.width ?? 380;
+  const height = savedBounds?.height ?? 124;
+  // Saved bounds only count while they are on a connected display
+  const visible =
+    savedBounds &&
+    screen
+      .getAllDisplays()
+      .some(
+        ({ workArea: area }) =>
+          savedBounds.x < area.x + area.width &&
+          savedBounds.x + savedBounds.width > area.x &&
+          savedBounds.y < area.y + area.height &&
+          savedBounds.y + 40 > area.y
+      );
+
+  miniPlayerWindow = new BrowserWindow({
+    width,
+    height,
+    x: visible ? savedBounds.x : workArea.x + workArea.width - width - 24,
+    y: visible ? savedBounds.y : workArea.y + workArea.height - height - 24,
+    minWidth: 300,
+    minHeight: 96,
+    maxHeight: 240,
+    frame: false,
+    show: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: store.get("appearance").miniPlayerAlwaysOnTop,
+    title: "Mini player",
+    icon: getIconPath("ytmd.png"),
+    backgroundColor: titleBarOverlayFor(store.get("appearance").theme).color,
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true,
+      preload: path.join(__dirname, `../renderer/windows/mini-player/preload.js`),
+      devTools: store.get("developer.enableDevTools")
+    }
+  });
+
+  miniPlayerWindow.on("close", () => {
+    store.set("state.miniPlayerBounds", miniPlayerWindow.getBounds());
+  });
+  miniPlayerWindow.once("closed", () => {
+    miniPlayerWindow = null;
+    lastMiniPlayerKey = "";
+  });
+  miniPlayerWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  miniPlayerWindow.webContents.on("will-navigate", event => {
+    if (process.env.NODE_ENV === "development" && event.url.startsWith("http://localhost")) return;
+    event.preventDefault();
+  });
+  miniPlayerWindow.once("ready-to-show", () => {
+    miniPlayerWindow.show();
+  });
+
+  if (ALL_WINDOWS_VITE_DEV_SERVER_URL) miniPlayerWindow.loadURL(ALL_WINDOWS_VITE_DEV_SERVER_URL + "/windows/mini-player/index.html");
+  else miniPlayerWindow.loadFile(path.join(__dirname, `../renderer/windows/mini-player/index.html`));
+}
+//#endregion Mini player
 
 function urlIsGoogleAccountsDomain(url: URL): boolean {
   // https://www.google.com/supported_domains
@@ -1657,6 +1914,48 @@ app.on("ready", async () => {
     return ytmViewIntegrationScripts;
   });
 
+  // Mini player
+  ipcMain.on("miniPlayer:toggle", event => {
+    if (!isAppWindow(event.sender)) return;
+    toggleMiniPlayer();
+  });
+
+  ipcMain.on("miniPlayer:requestState", event => {
+    if (event.sender !== miniPlayerWindow?.webContents) return;
+    sendMiniPlayerState(true);
+  });
+
+  ipcMain.on("miniPlayer:command", (event, command: string, value?: unknown) => {
+    if (event.sender !== miniPlayerWindow?.webContents || !ytmView) return;
+    if (!["playPause", "next", "previous", "toggleLike", "toggleDislike", "seekTo"].includes(command)) return;
+    if (command === "seekTo" && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) return;
+    ytmView.webContents.send("remoteControl:execute", command, value);
+  });
+
+  ipcMain.on("miniPlayer:setAlwaysOnTop", (event, alwaysOnTop: unknown) => {
+    if (event.sender !== miniPlayerWindow?.webContents) return;
+    store.set("appearance.miniPlayerAlwaysOnTop", alwaysOnTop === true);
+  });
+
+  ipcMain.on("miniPlayer:showMainWindow", event => {
+    if (event.sender !== miniPlayerWindow?.webContents) return;
+    showMainWindow();
+  });
+
+  ipcMain.on("miniPlayer:close", event => {
+    if (event.sender !== miniPlayerWindow?.webContents) return;
+    miniPlayerWindow.close();
+  });
+
+  // The synced lyrics line that is being sung, for the mini player
+  ipcMain.on("ytmView:lyricsLine", (event, line: unknown) => {
+    if (event.sender !== ytmView?.webContents) return;
+    const text = typeof line === "string" && line.trim() ? line.trim().slice(0, 300) : null;
+    if (text === currentLyricsLine) return;
+    currentLyricsLine = text;
+    sendMiniPlayerState(true);
+  });
+
   // Handle memory store ipc
   ipcMain.on("memoryStore:set", (event, key: string, value?: unknown) => {
     if (settingsWindow && event.sender !== settingsWindow.webContents && event.sender !== mainWindow.webContents) return;
@@ -1665,7 +1964,8 @@ app.on("ready", async () => {
   });
 
   ipcMain.handle("memoryStore:get", (event, key: string) => {
-    if (settingsWindow && event.sender !== settingsWindow.webContents) return;
+    // The main window used to be refused while the settings window was open
+    if (!isAppWindow(event.sender)) return;
 
     return memoryStore.get(key);
   });
@@ -1678,15 +1978,7 @@ app.on("ready", async () => {
   });
 
   ipcMain.handle("settings:get", (event, key: string) => {
-    if (
-      mainWindow &&
-      event.sender !== mainWindow.webContents &&
-      settingsWindow &&
-      event.sender !== settingsWindow.webContents &&
-      ytmView &&
-      event.sender !== ytmView.webContents
-    )
-      return;
+    if (!isAppWindow(event.sender) && event.sender !== ytmView?.webContents) return;
 
     return store.get(key);
   });
@@ -1860,6 +2152,19 @@ app.on("ready", async () => {
       type: "separator"
     },
     {
+      label: "Mini player",
+      type: "normal",
+      click: toggleMiniPlayer
+    },
+    {
+      label: "Fullscreen lyrics",
+      type: "normal",
+      click: toggleLyricsFullscreen
+    },
+    {
+      type: "separator"
+    },
+    {
       label: "Quit",
       type: "normal",
       click: () => {
@@ -1923,6 +2228,7 @@ app.on("ready", async () => {
 
   // NowPlayingNotifications
   if (store.get("general").showNotificationOnSongChange) {
+    nowPlayingNotifications.provide(store, () => !!mainWindow && mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused());
     nowPlayingNotifications.enable();
     log.info("Integration enabled: Now playing notifications");
   }
@@ -1937,6 +2243,8 @@ app.on("ready", async () => {
   // Built-in theme presets are independent from custom CSS and can be combined with it.
   builtInTheme.provide(ytmView);
   builtInTheme.setTheme(store.get("appearance").theme);
+  playerStateStore.addEventListener(updateDynamicPalette);
+  playerStateStore.addEventListener(() => sendMiniPlayerState());
 
   // RatioVolume
   if (store.get("playback").ratioVolume) {
@@ -1967,6 +2275,10 @@ app.on("ready", async () => {
   }
 
   nativeTheme.on("updated", setTrayIcon);
+
+  powerMonitor.on("lock-screen", () => {
+    if (store.get("playback").pauseOnLock) ytmView?.webContents.send("remoteControl:execute", "pause");
+  });
 });
 
 app.on("before-quit", () => {
