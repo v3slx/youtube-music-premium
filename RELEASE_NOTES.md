@@ -44,6 +44,7 @@ The biggest update so far: a mini player, an equalizer, fullscreen lyrics, a the
 - Richer tray menu with the current song, like, mini player, fullscreen lyrics and copy song link
 - Export your settings to a file and import them again
 - The window buttons and title bar follow the theme
+- Midnight, Ocean and Forest each have their own accent colour in settings, the mini player and this window
 - This window appears once after each update
 
 ## Performance and stability
