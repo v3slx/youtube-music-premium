@@ -1,18 +1,23 @@
 # YouTube Music Premium 2.1.5
 
-Lyrics, redone: word by word, right on time and a lot nicer to watch.
+Fixes for the lyrics, a new sleep timer and a fresher mini player, on top of the lyrics update from 2.1.4 further down.
 
 ## Fixed in 2.1.5
 
 - After a few songs in a row the lyrics could jump to the end and fullscreen lyrics showed a position far past the end of the song (for example 12:50 of 3:22). They now always follow the song itself
 - Leaving full screen (F11) in fullscreen lyrics could leave YouTube Music's page broken, with a tiny cover and a jumpy layout. Full screen now only enlarges the window and no longer touches YouTube Music's own player
 - The mini player's buttons in the top right corner (keep on top, open the app, close) disappeared as soon as the mouse got there, and "keep on top" showed up as the word KEEP. They are always there now, with proper icons
+- The "save to playlist" button in the player bar did nothing at all when your playlists could not be loaded; it now says so
+
+## Sleep timer
+
+- A new sleep timer panel: pick 5 minutes to 2 hours or the end of the current song, see the time left in a ring and when the music will pause, add 5 minutes or turn it off. At the end the music fades out gently instead of stopping hard, and a small dot on the button shows that a timer is running
 
 ## Mini player
 
 - A fresher look: sharper icons, the album art glowing through the background, the lyrics line fading from one line to the next, and the cover shrinks a little while paused
 
-## Lyrics
+## Lyrics, redone in 2.1.4
 
 - **Word by word:** every word lights up while it is sung, long notes glow. Songs from the AMLL database are timed word by word by hand; for all other songs the app estimates the timing of the words from the line
 - **On time:** the lyrics now follow the song to the millisecond. Before, they only moved with the player's four updates a second and then faded in, so every line came up to half a second late

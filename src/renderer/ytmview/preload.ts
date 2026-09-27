@@ -102,8 +102,25 @@ function createStyleSheet() {
         display: none;
       }
 
+      .ytmd-player-bar-control.sleep-timer-button {
+        position: relative;
+      }
+
       .ytmd-player-bar-control.sleep-timer-button.active {
         color: #FFFFFF;
+      }
+
+      /* A small dot under the icon while a sleep timer runs */
+      .ytmd-player-bar-control.sleep-timer-button.active::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 3px;
+        width: 4px;
+        height: 4px;
+        margin-left: -2px;
+        border-radius: 50%;
+        background: currentColor;
       }
 
       /* The synced lyrics bring their own styles (timedlyrics.script.js) */
