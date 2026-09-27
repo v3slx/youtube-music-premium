@@ -46,6 +46,11 @@ declare const YTMD_DISABLE_UPDATES: boolean;
 declare const YTMD_UPDATE_FEED_OWNER: string;
 declare const YTMD_UPDATE_FEED_REPOSITORY: string;
 
+// A second copy for testing (own settings, login and single instance lock) so a
+// development build never touches the installed app's data
+const isolatedUserData = process.env.YTMD_USER_DATA_DIR ? path.resolve(process.env.YTMD_USER_DATA_DIR) : null;
+if (isolatedUserData) app.setPath("userData", isolatedUserData);
+
 const assetFolder = path.join(process.env.NODE_ENV === "development" ? path.join(app.getAppPath(), "src/assets") : process.resourcesPath);
 const isDarwin = process.platform === "darwin";
 
@@ -91,9 +96,16 @@ log.initialize({
 // Handle logs and errors
 log.errorHandler.startCatching({
   showDialog: false,
-  onError({ error, processType, versions }) {
+  onError({ error, errorName, processType, versions }) {
     if (applicationExited) return;
     if (processType === "renderer") return;
+
+    // A promise nobody handled (a failed network request in an integration, for example) is
+    // logged, but must not take the whole app down the way an uncaught exception does
+    if (errorName?.includes("rejection")) {
+      log.error("Unhandled promise rejection", error);
+      return false;
+    }
 
     if (stateSaverInterval) clearInterval(stateSaverInterval);
 
@@ -240,7 +252,8 @@ function handleProtocol(url: string) {
 }
 
 // This will register the protocol in development, this is intentional and should stay this way for development purposes
-if (!app.isDefaultProtocolClient("ytmd")) {
+// (not for isolated test copies, the installed app keeps the ytmd:// links)
+if (!isolatedUserData && !app.isDefaultProtocolClient("ytmd")) {
   if (process.defaultApp) {
     if (process.argv.length >= 2) {
       log.info("Application set as default protcol client for 'ytmd'");
@@ -323,6 +336,26 @@ if (app.isPackaged && !shouldDisableUpdates() && !YTMD_DISABLE_UPDATES) {
   );
 } else {
   memoryStore.set("autoUpdaterDisabled", true);
+}
+
+// The native window buttons (minimize, maximize, close) are drawn by the OS on this colour, so it
+// has to follow the theme or the title bar ends in a black box next to a tinted bar
+const titleBarColors: Record<ThemePreset, string> = {
+  [ThemePreset.Default]: "#111111",
+  [ThemePreset.Midnight]: "#110f1b",
+  [ThemePreset.Ocean]: "#071921",
+  [ThemePreset.Forest]: "#0f1a12"
+};
+
+function titleBarOverlayFor(theme: ThemePreset) {
+  return { color: titleBarColors[theme] ?? titleBarColors[ThemePreset.Default], symbolColor: "#BBBBBB", height: 36 };
+}
+
+function applyTitleBarTheme(theme: ThemePreset) {
+  if (process.platform === "linux") return; // setTitleBarOverlay is Windows/macOS only
+  for (const window of [mainWindow, settingsWindow]) {
+    if (window && !window.isDestroyed()) window.setTitleBarOverlay(titleBarOverlayFor(theme));
+  }
 }
 
 function getIconPath(icon: string) {
@@ -474,6 +507,10 @@ const store = new Conf<StoreSchema>({
   }
 });
 store.onDidAnyChange(async (newState, oldState) => {
+  if (mainWindow !== null) {
+    mainWindow.webContents.send("settings:stateChanged", newState, oldState);
+  }
+
   if (settingsWindow !== null) {
     settingsWindow.webContents.send("settings:stateChanged", newState, oldState);
   }
@@ -519,6 +556,7 @@ store.onDidAnyChange(async (newState, oldState) => {
   if (newState.appearance.theme !== oldState.appearance.theme) {
     builtInTheme.provide(ytmView);
     builtInTheme.setTheme(newState.appearance.theme);
+    applyTitleBarTheme(newState.appearance.theme);
     log.info("Appearance update: Theme preset");
   }
   if (oldState.appearance.trayIconStyle !== newState.appearance.trayIconStyle) setTrayIcon();
@@ -632,6 +670,16 @@ stateSaverInterval = setInterval(
   5 * 60 * 1000
 );
 
+// Loaded once: the taskbar buttons used to be rebuilt from disk on every progress tick
+const thumbarIcons: Partial<Record<"previous" | "play" | "pause" | "next", Electron.NativeImage>> = {};
+function thumbarIcon(name: "previous" | "play" | "pause" | "next") {
+  const files = { previous: "play-previous-button.png", play: "play-button.png", pause: "pause-button.png", next: "play-next-button.png" };
+  return (thumbarIcons[name] ??= nativeImage.createFromPath(getControlsIconPath(files[name])));
+}
+
+let lastThumbarKey: string | null = null;
+let lastTaskbarProgress: string | null = null;
+
 function setupTaskbarFeatures() {
   // Setup Taskbar Icons
   if (mainWindow && mainWindow.isVisible() && process.platform === "win32") {
@@ -678,11 +726,13 @@ function setupTaskbarFeatures() {
         taskbarFlags.push("disabled");
       }
 
-      if (mainWindow && mainWindow.isVisible()) {
+      const thumbarKey = `${hasVideo}:${isPlaying}`;
+      if (mainWindow && mainWindow.isVisible() && thumbarKey !== lastThumbarKey) {
+        lastThumbarKey = thumbarKey;
         mainWindow.setThumbarButtons([
           {
             tooltip: "Previous",
-            icon: nativeImage.createFromPath(getControlsIconPath("play-previous-button.png")),
+            icon: thumbarIcon("previous"),
             flags: taskbarFlags,
             click() {
               if (ytmView) {
@@ -692,9 +742,7 @@ function setupTaskbarFeatures() {
           },
           {
             tooltip: "Play/Pause",
-            icon: isPlaying
-              ? nativeImage.createFromPath(getControlsIconPath("pause-button.png"))
-              : nativeImage.createFromPath(getControlsIconPath("play-button.png")),
+            icon: isPlaying ? thumbarIcon("pause") : thumbarIcon("play"),
             flags: taskbarFlags,
             click() {
               if (ytmView) {
@@ -704,7 +752,7 @@ function setupTaskbarFeatures() {
           },
           {
             tooltip: "Next",
-            icon: nativeImage.createFromPath(getControlsIconPath("play-next-button.png")),
+            icon: thumbarIcon("next"),
             flags: taskbarFlags,
             click() {
               if (ytmView) {
@@ -717,15 +765,20 @@ function setupTaskbarFeatures() {
     }
 
     if (mainWindow && store.get("playback.progressInTaskbar")) {
-      mainWindow.setProgressBar(hasVideo ? state.videoProgress / state.videoDetails.durationSeconds : -1, {
-        mode: isPlaying ? "normal" : "paused"
-      });
+      const progress = hasVideo && state.videoDetails.durationSeconds > 0 ? state.videoProgress / state.videoDetails.durationSeconds : -1;
+      const mode = isPlaying ? "normal" : "paused";
+      const progressKey = `${progress < 0 ? -1 : progress.toFixed(3)}:${mode}`;
+      if (progressKey !== lastTaskbarProgress) {
+        lastTaskbarProgress = progressKey;
+        mainWindow.setProgressBar(progress, { mode });
+      }
     }
   });
 
   store.onDidChange("playback", (newValue, oldValue) => {
     if (mainWindow && newValue.progressInTaskbar !== oldValue.progressInTaskbar && !newValue.progressInTaskbar) {
       mainWindow.setProgressBar(-1);
+      lastTaskbarProgress = null;
     }
   });
 }
@@ -999,11 +1052,7 @@ const createOrShowSettingsWindow = (): void => {
     parent: mainWindow,
     modal: !isDarwin,
     titleBarStyle: "hidden",
-    titleBarOverlay: {
-      color: "#000000",
-      symbolColor: "#BBBBBB",
-      height: 36
-    },
+    titleBarOverlay: titleBarOverlayFor(store.get("appearance").theme),
     webPreferences: {
       sandbox: true,
       contextIsolation: true,
@@ -1076,6 +1125,7 @@ function isPreventedNavOrRedirect(url: URL): boolean {
 
 const createYTMView = (): void => {
   memoryStore.set("ytmViewLoadTimedout", false);
+  memoryStore.set("ytmViewLoadingError", false);
   memoryStore.set("ytmViewLoading", true);
   memoryStore.set("ytmViewLoadingStatus", "Initializing...");
 
@@ -1272,11 +1322,7 @@ const createMainWindow = (): void => {
     show: false,
     icon: getIconPath("ytmd.png"),
     titleBarStyle: "hidden",
-    titleBarOverlay: {
-      color: "#000000",
-      symbolColor: "#BBBBBB",
-      height: 36
-    },
+    titleBarOverlay: titleBarOverlayFor(store.get("appearance").theme),
     webPreferences: {
       sandbox: true,
       contextIsolation: true,
@@ -1339,6 +1385,9 @@ const createMainWindow = (): void => {
       });
     });
     sendMainWindowStateIpc();
+  });
+  mainWindow.on("show", () => {
+    lastThumbarKey = null;
   });
   mainWindow.on("maximize", sendMainWindowStateIpc);
   mainWindow.on("unmaximize", sendMainWindowStateIpc);
@@ -1790,21 +1839,21 @@ app.on("ready", async () => {
       label: "Play/Pause",
       type: "normal",
       click: () => {
-        ytmView.webContents.send("remoteControl:execute", "playPause");
+        ytmView?.webContents.send("remoteControl:execute", "playPause");
       }
     },
     {
       label: "Previous",
       type: "normal",
       click: () => {
-        ytmView.webContents.send("remoteControl:execute", "previous");
+        ytmView?.webContents.send("remoteControl:execute", "previous");
       }
     },
     {
       label: "Next",
       type: "normal",
       click: () => {
-        ytmView.webContents.send("remoteControl:execute", "next");
+        ytmView?.webContents.send("remoteControl:execute", "next");
       }
     },
     {

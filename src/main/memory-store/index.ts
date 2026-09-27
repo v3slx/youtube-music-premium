@@ -16,6 +16,9 @@ export default class MemoryStore<T extends Record<string, unknown>> {
   }
 
   public set(key: string, value: unknown) {
+    // Setting the same value again is common (status texts, flags); every change is cloned and
+    // broadcast to all windows, so an unchanged value stops here
+    if (Object.is(this.state[key], value)) return;
     const oldState = structuredClone(this.state);
     this.state[key as string] = value;
     this.eventEmitter.emit("stateChanged", this.state, oldState);

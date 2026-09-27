@@ -183,10 +183,27 @@
     }
   }
 
-  async function applyCurrentState() {
+  // The store changes constantly; lyrics only care about the player page, the song and the setting
+  let lastApplied = null;
+
+  async function applyCurrentState(force) {
     const state = ytmStore.getState();
     const playerPage = state.playerPage;
     if (!playerPage || !playerPage.playerPageTabs) return;
+
+    const enabledNow = window.__YTMD_TIMED_LYRICS_ENABLED__ !== false;
+    const playerResponse = state.player?.playerResponse;
+    if (
+      !force &&
+      lastApplied &&
+      lastApplied.playerPage === playerPage &&
+      lastApplied.playerResponse === playerResponse &&
+      lastApplied.enabled === enabledNow &&
+      !fetching
+    ) {
+      return;
+    }
+    lastApplied = { playerPage, playerResponse, enabled: enabledNow };
 
     const lyricsTabIndex = playerPage.playerPageTabs.findIndex(tab => tab.tabRenderer?.endpoint?.browseEndpoint?.browseId?.startsWith("MPLY"));
     if (lyricsTabIndex === -1) return;
@@ -209,6 +226,9 @@
       currentLyrics = await fetchTimedLyrics(browseId);
       fetching = false;
       if (currentLyrics) renderLyrics(currentLyrics);
+      // The page may have changed while the request ran
+      void applyCurrentState(true);
+      return;
     }
 
     viewingLyricsTab = playerPage.playerPageTabSelectedIndex === lyricsTabIndex;
@@ -227,7 +247,7 @@
       window.__YTMD_TIMED_LYRICS_ENABLED__ = enabled;
       // Allow a fetch for the current song again when the user turns the setting back on
       if (enabled) fetchedBrowseId = "";
-      void applyCurrentState();
+      void applyCurrentState(true);
     },
     setOffsetMs: offsetMs => {
       window.__YTMD_TIMED_LYRICS_OFFSET_MS__ = offsetMs;

@@ -1,5 +1,7 @@
 <script setup lang="ts" generic="T extends 'checkbox' | 'file' | 'range' | 'select' | 'custom'">
-import { computed, ref } from "vue";
+import { computed, ref, useId } from "vue";
+import { useSettingSearch } from "../composables/useSettingsSearch";
+import SettingsSearchText from "./SettingsSearchText.vue";
 
 type ModelValue = {
   checkbox: boolean;
@@ -27,6 +29,11 @@ const props = defineProps<{
   optionsMap?: { [key: string]: string }; // This is for the select menu
 }>();
 const emit = defineEmits(["update:modelValue", "file-change", "change", "clear"]);
+const controlId = useId();
+const { matches, query } = useSettingSearch(() => ({
+  name: props.name,
+  description: [props.description, props.disabled ? props.disabledMessage : undefined].filter(Boolean).join(" ")
+}));
 
 const value = computed({
   get() {
@@ -41,70 +48,99 @@ const hasDescription = computed(() => {
   return props.description && props.description.trim() !== "";
 });
 
-const fileInput = ref(null);
-
-const selectOpen = ref(false);
-const selectedOption = computed(() => {
-  return props.optionsMap?.[String(props.modelValue)] ?? "";
+const fileInput = ref<HTMLInputElement | null>(null);
+const descriptionId = computed(() => {
+  const ids = [];
+  if (hasDescription.value) ids.push(`${controlId}-description`);
+  if (props.disabled && props.disabledMessage) ids.push(`${controlId}-disabled`);
+  return ids.join(" ") || undefined;
 });
 
-// This function should be using ModelValue[T] but because it's bound to @click it doesn't interpret it as correct
-function select(optionKey: string) {
+function select(event: Event) {
+  if (!(event.target instanceof HTMLSelectElement)) return;
+  const optionKey = event.target.value;
   value.value = (typeof props.modelValue === "number" ? Number.parseInt(optionKey) : optionKey) as ModelValue[T];
-  selectOpen.value = false;
   emit("change");
 }
 </script>
 
 <template>
-  <div :class="{ 'ytmd-setting': true, 'indented': props.indented, 'flex-column': props.flexColumn }">
-    <p v-if="!disabled && !hasDescription">
-      {{ name }} <span v-if="restartRequired" class="reload-required material-symbols-outlined">autorenew</span>
-      <span v-if="beta" class="beta-tag" title="This is a beta feature and may not work correctly yet.">BETA</span>
-    </p>
-    <div v-else-if="!disabled && hasDescription" class="name-description">
-      <p class="name">
-        {{ name }} <span v-if="restartRequired" class="reload-required material-symbols-outlined">autorenew</span>
-        <span v-if="beta" class="beta-tag" title="This is a beta feature and may not work correctly yet.">BETA</span>
+  <div v-show="matches" :class="{ 'ytmd-setting': true, 'indented': props.indented, 'flex-column': props.flexColumn, 'is-disabled': disabled }">
+    <div class="setting-copy">
+      <label :id="`${controlId}-label`" class="name" :for="type !== 'custom' ? controlId : undefined">
+        <slot name="name">
+          <span><SettingsSearchText :text="name" :query="query" /></span>
+        </slot>
+        <span v-if="restartRequired" class="reload-required material-symbols-outlined" title="Restart required" aria-label="Restart required">autorenew</span>
+        <span v-if="beta" class="beta-tag" title="This is a beta feature and may not work correctly yet.">Beta</span>
+        <span v-if="disabled" class="disabled-tag">Disabled</span>
+      </label>
+      <p v-if="hasDescription" :id="`${controlId}-description`" class="description">
+        <SettingsSearchText :text="description ?? ''" :query="query" />
       </p>
-      <p class="description">{{ description }}</p>
-    </div>
-    <div v-if="disabled" class="disabled-name-message">
-      <p class="name">
-        <span class="disabled-tag">DISABLED</span> {{ name }} <span v-if="restartRequired" class="reload-required material-symbols-outlined">autorenew</span>
-        <span v-if="beta" class="beta-tag" title="This is a beta feature and may not work correctly yet.">BETA</span>
+      <p v-if="disabled && disabledMessage" :id="`${controlId}-disabled`" class="message">
+        <SettingsSearchText :text="disabledMessage" :query="query" />
       </p>
-      <p class="message">{{ disabledMessage }}</p>
     </div>
 
     <input
-      v-if="type !== 'file' && type !== 'range' && type !== 'select' && type !== 'custom'"
+      v-if="type === 'checkbox'"
+      :id="controlId"
       v-model="value"
       :disabled="disabled"
-      :type="props.type"
+      type="checkbox"
+      role="switch"
+      :aria-describedby="descriptionId"
       @change="$emit('change', $event)"
     />
-    <div v-if="type == 'range'" class="range-selector">
-      <span class="range-value">{{ value }}</span>
-      <input v-model="value" :disabled="disabled" :type="props.type" :max="props.max" :min="props.min" :step="props.step" @change="$emit('change', $event)" />
+    <div v-if="type === 'range'" class="range-selector">
+      <output :for="controlId" class="range-value">{{ value }}</output>
+      <input
+        :id="controlId"
+        v-model.number="value"
+        :disabled="disabled"
+        type="range"
+        :max="props.max"
+        :min="props.min"
+        :step="props.step"
+        :aria-describedby="descriptionId"
+        @change="$emit('change', $event)"
+      />
     </div>
-    <div v-if="type == 'file'" class="file-picker">
-      <input ref="fileInput" :disabled="disabled" type="file" accept=".css" :data-setting="bindSetting" @change="$emit('file-change', $event)" />
+    <div v-if="type === 'file'" class="file-picker">
+      <input
+        ref="fileInput"
+        :disabled="disabled"
+        type="file"
+        accept=".css"
+        :data-setting="bindSetting"
+        :aria-label="name"
+        @change="$emit('file-change', $event)"
+      />
       <div class="file-input-button">
-        <button class="choose" @click="fileInput.click()"><span class="material-symbols-outlined">file_open</span></button>
-        <input :disabled="disabled" type="text" readonly class="path" placeholder="No file chosen" :value="value" />
-        <button v-if="value" class="remove" @click="$emit('clear')"><span class="material-symbols-outlined">delete</span></button>
+        <button
+          :id="controlId"
+          type="button"
+          class="choose"
+          :disabled="disabled"
+          :aria-label="`Choose ${name.toLowerCase()}`"
+          :aria-describedby="descriptionId"
+          title="Choose CSS file"
+          @click="fileInput?.click()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">file_open</span>
+        </button>
+        <input :disabled="disabled" type="text" readonly class="path" placeholder="No file chosen" :value="value" :aria-label="`${name} path`" />
+        <button v-if="value" type="button" class="remove" :disabled="disabled" aria-label="Remove CSS file" title="Remove CSS file" @click="$emit('clear')">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
       </div>
     </div>
-    <div v-if="type == 'select'" :class="{ select: true, open: selectOpen }">
-      <div class="selected" @click="selectOpen = !selectOpen">
-        <p class="text">{{ selectedOption }}</p>
-        <span v-if="!selectOpen" class="material-symbols-outlined">arrow_drop_down</span>
-        <span v-if="selectOpen" class="material-symbols-outlined">arrow_drop_up</span>
-      </div>
-      <div class="options">
-        <div v-for="(optionValue, optionKey) of props.optionsMap" :key="optionKey" class="option" @click="select(optionKey)">{{ optionValue }}</div>
-      </div>
+    <div v-if="type === 'select'" class="select-wrapper">
+      <select :id="controlId" :value="value" :disabled="disabled" :aria-describedby="descriptionId" @change="select">
+        <option v-for="(optionValue, optionKey) of props.optionsMap" :key="optionKey" :value="optionKey">{{ optionValue }}</option>
+      </select>
+      <span class="select-arrow material-symbols-outlined" aria-hidden="true">expand_more</span>
     </div>
 
     <slot></slot>
@@ -113,229 +149,312 @@ function select(optionKey: string) {
 
 <style scoped>
 .ytmd-setting {
+  box-sizing: border-box;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 24px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--ytmd-border, #29292d);
+  color: var(--ytmd-text, #f5f5f7);
+}
+
+.ytmd-setting:last-child {
+  border-bottom: none;
 }
 
 .ytmd-setting.indented {
   margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid #212121;
+  padding-left: 16px;
+  border-left: 2px solid var(--ytmd-border, #29292d);
 }
 
 .ytmd-setting.flex-column {
   flex-direction: column;
-  align-items: initial;
-  justify-content: initial;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 16px;
 }
 
-.ytmd-setting .beta-tag {
-  background-color: #f44336;
+.setting-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+  cursor: inherit;
+}
+
+.name[for] {
+  cursor: pointer;
+}
+
+.is-disabled .name {
+  color: var(--ytmd-muted, #9999a3);
+  cursor: default;
+}
+
+.beta-tag,
+.disabled-tag {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--ytmd-border, #29292d);
   border-radius: 4px;
-  padding: 2px 4px;
+  padding: 0 5px;
+  background-color: var(--ytmd-raised, #202024);
+  color: var(--ytmd-muted, #9999a3);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.7;
 }
 
-.ytmd-setting .disabled-tag {
-  background-color: #212121;
-  border-radius: 4px;
-  padding: 2px 4px;
-}
-
-.name-description .name,
-.disabled-name-message .name {
-  margin-bottom: unset;
-}
-
-.name-description .description,
-.disabled-name-message .message {
-  margin-top: 4px;
-  color: #969696;
+.description,
+.message {
+  margin: 4px 0 0;
+  color: var(--ytmd-muted, #9999a3);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .reload-required {
-  vertical-align: middle;
+  color: var(--ytmd-muted, #9999a3);
+  font-size: 17px;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--ytmd-accent, #ff565e);
+  outline-offset: 3px;
 }
 
 input[type="checkbox"] {
-  -webkit-appearance: none;
-  -moz-appearance: none;
   appearance: none;
-  min-width: 62px;
-  min-height: 32px;
-  width: 62px;
-  height: 32px;
-  display: inline-block;
   position: relative;
-  border-radius: 50px;
-  overflow: hidden;
-  outline: none;
-  border: none;
+  flex: 0 0 42px;
+  width: 42px;
+  min-width: 42px;
+  height: 24px;
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--ytmd-border, #29292d);
+  border-radius: 20px;
+  background-color: var(--ytmd-raised, #202024);
   cursor: pointer;
-  background-color: #212121;
-  transition: background-color ease 0.3s;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
 }
 
-input[type="checkbox"]:before {
+input[type="checkbox"]::before {
   content: "";
   display: block;
   position: absolute;
-  z-index: 2;
-  width: 28px;
-  height: 28px;
-  background: #fff;
-  left: 2px;
-  top: 2px;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  top: 3px;
   border-radius: 50%;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  transition: all ease 0.3s;
+  background-color: var(--ytmd-muted, #9999a3);
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+
+input[type="checkbox"]:hover:not(:disabled) {
+  border-color: var(--ytmd-muted, #9999a3);
 }
 
 input[type="checkbox"]:checked {
-  background-color: #f44336;
+  border-color: var(--ytmd-accent, #ff565e);
+  background-color: var(--ytmd-accent, #ff565e);
 }
 
-input[type="checkbox"]:checked:before {
-  left: 32px;
+input[type="checkbox"]:checked::before {
+  transform: translateX(18px);
+  background-color: var(--ytmd-on-accent, #ffffff);
 }
 
-input[type="checkbox"]:disabled {
-  background-color: #212121;
+input:disabled,
+button:disabled,
+select:disabled {
   cursor: not-allowed;
-}
-
-input[type="checkbox"]:disabled::before {
-  background-color: #969696;
+  opacity: 0.45;
 }
 
 input[type="file"] {
   display: none;
 }
 
-.file-picker {
-  background-color: #212121;
-  border-radius: 4px;
+.file-picker,
+.select-wrapper {
+  flex: 0 1 216px;
+  width: 216px;
+  min-width: 160px;
 }
 
 .file-input-button {
-  width: 216px;
-  border-radius: 4px;
   display: flex;
   align-items: center;
+  border: 1px solid var(--ytmd-border, #29292d);
+  border-radius: 7px;
+  background-color: var(--ytmd-raised, #202024);
 }
 
 .file-input-button button {
-  padding: 8px;
-  border: none;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  cursor: pointer;
-}
-
-.file-input-button button.choose {
-  background-color: #f44336;
-  border-radius: 4px 0 0 4px;
-}
-
-.file-input-button button.remove {
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
   background-color: transparent;
-  border-left: 1px solid #323232;
-  border-radius: 0 4px 4px 0;
+  color: var(--ytmd-text, #f5f5f7);
+  cursor: pointer;
+  transition: background-color 160ms ease;
 }
 
-.file-input-button button .material-symbols-outlined {
-  margin-right: 4px;
+.file-input-button button:hover:not(:disabled) {
+  background-color: var(--ytmd-hover, #303036);
+}
+
+.file-input-button .remove:hover:not(:disabled) {
+  color: var(--ytmd-danger, #ff767d);
+}
+
+.file-input-button .material-symbols-outlined {
   font-size: 18px;
 }
 
-.file-input-button input[type="text"] {
-  margin: 0;
-  padding: 8px;
+.file-input-button .path {
+  min-width: 0;
   width: 100%;
+  margin: 0;
+  padding: 8px 4px;
   border: none;
   background-color: transparent;
-}
-
-.file-input-button input[type="text"]:focus,
-.file-input-button input[type="text"]:active {
-  outline: none;
-}
-
-.file-input-button p {
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
+  color: var(--ytmd-text, #f5f5f7);
+  font-size: 12px;
   text-overflow: ellipsis;
 }
 
+.file-input-button .path::placeholder {
+  color: var(--ytmd-muted, #9999a3);
+}
+
+.range-selector {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex: 0 1 216px;
+  min-width: 160px;
+}
+
 .range-value {
-  vertical-align: top;
-  margin-right: 8px;
+  min-width: 34px;
+  color: var(--ytmd-muted, #9999a3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 input[type="range"] {
   appearance: none;
-  height: 15px;
+  width: 150px;
+  min-width: 80px;
+  height: 5px;
+  margin: 0;
+  padding: 0;
+  border: none;
   border-radius: 4px;
-  background: #212121;
-  outline: none;
+  background-color: var(--ytmd-hover, #303036);
+  cursor: pointer;
 }
 
 input[type="range"]::-webkit-slider-thumb {
   appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--ytmd-accent, #ff565e);
   border-radius: 50%;
-  background: #f44336;
-  cursor: pointer;
+  background-color: var(--ytmd-accent, #ff565e);
 }
 
-.select {
+.select-wrapper {
   position: relative;
-  width: 216px;
-  background-color: #212121;
-  border-radius: 4px;
 }
 
-.select.open {
-  border-radius: 4px 4px 0 0;
-}
-
-.select .selected {
-  cursor: pointer;
-  padding: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.select .selected .text {
-  margin: unset;
-  padding: unset;
-}
-
-.select .options {
-  overflow: hidden;
-  position: absolute;
-  left: 0;
-  right: 0;
-  z-index: 1;
-  border-radius: 0 0 4px 4px;
+select {
+  appearance: none;
   width: 100%;
-}
-
-.select .options .option {
-  user-select: none;
+  min-height: 36px;
+  padding: 7px 30px 7px 10px;
+  border: 1px solid var(--ytmd-border, #29292d);
+  border-radius: 7px;
+  background-color: var(--ytmd-raised, #202024);
+  color: var(--ytmd-text, #f5f5f7);
+  font-size: 12px;
+  text-overflow: ellipsis;
   cursor: pointer;
-  background-color: #212121;
-  padding: 8px;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
 }
 
-.select .options .option:hover {
-  background-color: #323232;
+select:hover:not(:disabled) {
+  border-color: var(--ytmd-muted, #9999a3);
+  background-color: var(--ytmd-hover, #303036);
 }
 
-.select:not(.open) .options {
-  display: none;
+.select-arrow {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ytmd-muted, #9999a3);
+  font-size: 19px;
+  pointer-events: none;
+}
+
+@media (max-width: 620px) {
+  .ytmd-setting {
+    gap: 16px;
+  }
+
+  .file-picker,
+  .select-wrapper,
+  .range-selector {
+    flex-basis: 180px;
+    width: 180px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before {
+    transition: none !important;
+  }
 }
 </style>

@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import KeybindInput from "../../components/KeybindInput.vue";
 import YTMDSetting from "../../components/YTMDSetting.vue";
+import SettingsSection from "../../components/SettingsSection.vue";
+import SettingsSearchText from "../../components/SettingsSearchText.vue";
+import { provideSettingsSearch } from "../../composables/useSettingsSearch";
 import { StoreSchema, ThemePreset, TrayIconStyle } from "~shared/store/schema";
 import { AuthToken } from "~shared/integrations/companion-server/types";
 import logo from "~assets/icons/ytmd.png";
@@ -17,6 +20,30 @@ const isDarwin = window.ytmd.isDarwin;
 const isLinux = window.ytmd.isLinux;
 
 const currentTab = ref(1);
+const searchInput = ref<HTMLInputElement | null>(null);
+const content = ref<HTMLElement | null>(null);
+const { query, searching, counts, resultCount } = provideSettingsSearch();
+const sections = [
+  { id: 1, title: "General", icon: "tune" },
+  { id: 2, title: "Appearance", icon: "palette" },
+  { id: 3, title: "Playback", icon: "play_circle" },
+  { id: 4, title: "Integrations", icon: "extension" },
+  { id: 5, title: "Shortcuts", icon: "keyboard" },
+  { id: 6, title: "Advanced", icon: "code" },
+  { id: 99, title: "About", icon: "info" }
+];
+const visibleSections = computed(() => sections.filter(section => !searching.value || (counts.value.get(section.id) ?? 0) > 0));
+
+function sectionVisible(section: number) {
+  return searching.value ? (counts.value.get(section) ?? 0) > 0 : currentTab.value === section;
+}
+
+function clearSearch() {
+  query.value = "";
+  searchInput.value?.focus();
+}
+
+watch(query, () => content.value?.scrollTo({ top: 0 }));
 const requiresRestart = ref(false);
 const checkingForUpdate = ref(false);
 const updateAvailable = ref(await window.ytmd.isAppUpdateAvailable());
@@ -266,8 +293,14 @@ function removeCustomCSSPath() {
   store.set("appearance.customCSSPath", null);
 }
 
-function changeTab(newTab: number) {
+async function changeTab(newTab: number) {
   currentTab.value = newTab;
+  if (searching.value) {
+    await nextTick();
+    document.getElementById(`settings-section-${newTab}`)?.scrollIntoView({ block: "start" });
+  } else {
+    content.value?.scrollTo({ top: 0 });
+  }
 }
 
 function restartApplication() {
@@ -315,23 +348,62 @@ window.ytmd.handleUpdateDownloaded(() => {
 </script>
 
 <template>
-  <div class="settings-container">
+  <div class="settings-container" @keydown.ctrl.f.prevent="searchInput?.focus()" @keydown.meta.f.prevent="searchInput?.focus()">
+    <header class="settings-toolbar">
+      <h1>Settings</h1>
+      <div class="search-field">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input
+          ref="searchInput"
+          v-model="query"
+          type="search"
+          placeholder="Search settings"
+          aria-label="Search settings by title or description"
+          autocomplete="off"
+          spellcheck="false"
+          @keydown.esc.prevent="clearSearch"
+        />
+        <button v-if="query" type="button" class="clear-search" aria-label="Clear search" title="Clear search" @click="clearSearch">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+    </header>
     <div class="content-container">
-      <ul class="sidebar">
-        <li :class="{ active: currentTab === 1 }" @click="changeTab(1)"><span class="material-symbols-outlined">settings_applications</span>General</li>
-        <li :class="{ active: currentTab === 2 }" @click="changeTab(2)"><span class="material-symbols-outlined">brush</span>Appearance</li>
-        <li :class="{ active: currentTab === 3 }" @click="changeTab(3)"><span class="material-symbols-outlined">music_note</span>Playback</li>
-        <li :class="{ active: currentTab === 4 }" @click="changeTab(4)"><span class="material-symbols-outlined">wifi_tethering</span>Integrations</li>
-        <li :class="{ active: currentTab === 5 }" @click="changeTab(5)"><span class="material-symbols-outlined">keyboard</span>Shortcuts</li>
-        <span class="push"></span>
-        <li :class="{ active: currentTab === 99 }" @click="changeTab(99)"><span class="material-symbols-outlined">info</span>About</li>
-      </ul>
-      <div class="content">
+      <nav class="sidebar" aria-label="Settings sections">
+        <button
+          v-for="section in visibleSections"
+          :key="section.id"
+          type="button"
+          :class="{ 'active': !searching && currentTab === section.id, 'about-link': section.id === 99 }"
+          :aria-current="!searching && currentTab === section.id ? 'page' : undefined"
+          :aria-controls="`settings-section-${section.id}`"
+          @click="changeTab(section.id)"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">{{ section.icon }}</span>
+          <span>{{ section.title }}</span>
+          <span v-if="searching" class="match-count">{{ counts.get(section.id) }}</span>
+        </button>
+        <p v-if="!visibleSections.length" class="sidebar-empty">No matching sections</p>
+      </nav>
+      <main ref="content" class="content" :class="{ searching }" aria-label="Settings">
+        <p v-if="searching" class="search-summary" role="status">{{ resultCount }} {{ resultCount === 1 ? "result" : "results" }} across all settings</p>
+        <div v-if="searching && !resultCount" class="empty-search">
+          <span class="material-symbols-outlined" aria-hidden="true">search_off</span>
+          <h2>No settings found</h2>
+          <p>Try a different word, such as theme, lyrics or Discord.</p>
+          <button type="button" @click="clearSearch">Clear search</button>
+        </div>
         <div v-if="requiresRestart" class="restart-banner">
           <p class="message"><span class="material-symbols-outlined">autorenew</span> Restart app to apply changes</p>
           <button class="restart-button" @click="restartApplication">Restart</button>
         </div>
-        <div v-if="currentTab === 1" class="general-tab">
+        <SettingsSection
+          v-show="sectionVisible(1)"
+          :section="1"
+          title="General"
+          description="Choose how the app starts and keeps you informed."
+          class="general-tab"
+        >
           <YTMDSetting v-if="!isDarwin" v-model="hideToTrayOnClose" type="checkbox" name="Hide to tray on close" @change="settingsChanged" />
           <YTMDSetting v-model="showNotificationOnSongChange" type="checkbox" name="Show notification on song change" @change="settingsChanged" />
           <YTMDSetting v-model="startOnBoot" type="checkbox" name="Start on boot" @change="settingsChanged" />
@@ -339,39 +411,22 @@ window.ytmd.handleUpdateDownloaded(() => {
             <p>Start minimized</p>
             <input v-model="startMinimized" @change="settingsChanged" class="toggle" type="checkbox" />
           </div>-->
-          <YTMDSetting
-            v-model="disableHardwareAcceleration"
-            type="checkbox"
-            restart-required
-            name="Disable hardware acceleration"
-            @change="settingChangedRequiresRestart"
-          />
-        </div>
+        </SettingsSection>
 
-        <div v-if="currentTab === 2" class="appearance-tab">
+        <SettingsSection v-show="sectionVisible(2)" :section="2" title="Appearance" description="Make your listening space feel right." class="appearance-tab">
           <YTMDSetting v-model="alwaysShowVolumeSlider" type="checkbox" name="Always show volume slider" @change="settingsChanged" />
-          <YTMDSetting v-model="customCSSEnabled" type="checkbox" name="Custom CSS" @change="settingsChanged" />
-          <YTMDSetting
-            v-if="customCSSEnabled"
-            v-model="customCSSPath"
-            type="file"
-            indented
-            bind-setting="appearance.customCSSPath"
-            name="Custom CSS file path"
-            @file-change="settingChangedFile"
-            @clear="removeCustomCSSPath"
-          />
+
           <YTMDSetting
             v-model="theme"
             :options-map="{
-              [ThemePreset.Default]: 'YouTube Music default',
+              [ThemePreset.Default]: 'Standard (YouTube Music)',
               [ThemePreset.Midnight]: 'Midnight',
               [ThemePreset.Ocean]: 'Ocean',
               [ThemePreset.Forest]: 'Forest'
             }"
             type="select"
             name="Theme"
-            description="Built-in presets can be combined with Custom CSS."
+            description="Standard, Midnight, Ocean or Forest. Applies to the player and settings. Custom CSS is available in Advanced."
             @change="settingsChanged"
           />
           <YTMDSetting v-model="zoom" type="range" max="300" min="30" step="10" name="Zoom" @change="settingsChanged" />
@@ -383,13 +438,27 @@ window.ytmd.handleUpdateDownloaded(() => {
             name="Tray icon style"
             @change="settingsChanged"
           />
-        </div>
+        </SettingsSection>
 
-        <div v-if="currentTab === 3" class="playback-tab">
-          <YTMDSetting v-model="continueWhereYouLeftOff" name="Continue where you left off" type="checkbox" @change="settingsChanged" />
+        <SettingsSection
+          v-show="sectionVisible(3)"
+          :section="3"
+          title="Playback"
+          description="Adjust audio, lyrics and playback behavior."
+          class="playback-tab"
+        >
           <YTMDSetting
-            v-if="continueWhereYouLeftOff"
+            v-model="continueWhereYouLeftOff"
+            name="Continue where you left off"
+            description="Resume your last session, with the option to pause on application launch."
+            type="checkbox"
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="continueWhereYouLeftOff || searching"
             v-model="continueWhereYouLeftOffPaused"
+            :disabled="!continueWhereYouLeftOff"
+            disabled-message="Enable Continue where you left off in Playback to change this setting."
             type="checkbox"
             indented
             name="Pause on application launch"
@@ -402,12 +471,14 @@ window.ytmd.handleUpdateDownloaded(() => {
             v-model="timedLyrics"
             type="checkbox"
             name="Synced lyrics"
-            description="Replaces the lyrics tab with lyrics that follow along with the song. Only for songs YouTube has synced lyrics for."
+            description="Follow along with supported songs. Adjust the lyrics font size and timing offset below."
             @change="settingsChanged"
           />
           <YTMDSetting
-            v-if="timedLyrics"
+            v-if="timedLyrics || searching"
             v-model="timedLyricsFontSize"
+            :disabled="!timedLyrics"
+            disabled-message="Enable Synced lyrics in Playback to adjust this setting."
             type="range"
             indented
             max="40"
@@ -417,8 +488,10 @@ window.ytmd.handleUpdateDownloaded(() => {
             @change="settingsChanged"
           />
           <YTMDSetting
-            v-if="timedLyrics"
+            v-if="timedLyrics || searching"
             v-model="timedLyricsOffsetMs"
+            :disabled="!timedLyrics"
+            disabled-message="Enable Synced lyrics in Playback to adjust this setting."
             type="range"
             indented
             max="3000"
@@ -435,22 +508,32 @@ window.ytmd.handleUpdateDownloaded(() => {
             name="Audio output device"
             description="Routes YouTube Music audio to the selected device."
             @change="settingsChanged"
-          />
-          <div class="audio-output-actions"><button @click="refreshAudioOutputDevices">Refresh devices</button></div>
-        </div>
+          >
+            <div class="audio-output-actions"><button @click="refreshAudioOutputDevices">Refresh devices</button></div>
+          </YTMDSetting>
+        </SettingsSection>
 
-        <div v-if="currentTab === 4" class="integrations-tab">
+        <SettingsSection
+          v-show="sectionVisible(4)"
+          :section="4"
+          title="Integrations"
+          description="Connect your music to the apps you use."
+          class="integrations-tab"
+        >
           <YTMDSetting
             v-model="companionServerEnabled"
             type="checkbox"
             name="Companion server"
+            description="Manage authorized companions, authorization requests and browser communication."
             :disabled="!safeStorageAvailable"
             disabled-message="This integration cannot be enabled due to safeStorage being unavailable"
             @change="settingsChanged"
           />
           <YTMDSetting
-            v-if="companionServerEnabled && safeStorageAvailable"
+            v-if="(companionServerEnabled && safeStorageAvailable) || searching"
             v-model="companionServerCORSWildcardEnabled"
+            :disabled="!companionServerEnabled || !safeStorageAvailable"
+            disabled-message="Enable Companion server in Integrations to change this setting."
             type="checkbox"
             indented
             name="Allow browser communication"
@@ -458,8 +541,10 @@ window.ytmd.handleUpdateDownloaded(() => {
             @change="settingsChanged"
           />
           <YTMDSetting
-            v-if="companionServerEnabled && safeStorageAvailable"
+            v-if="(companionServerEnabled && safeStorageAvailable) || searching"
             v-model="companionServerAuthWindowEnabled"
+            :disabled="!companionServerEnabled || !safeStorageAvailable"
+            disabled-message="Enable Companion server in Integrations to change this setting."
             type="checkbox"
             indented
             name="Enable companion authorization"
@@ -492,18 +577,28 @@ window.ytmd.handleUpdateDownloaded(() => {
                   </td>
                   <td class="version">{{ authToken.appVersion }}</td>
                   <td class="controls">
-                    <button @click="deleteCompanionAuthToken(authToken.appId)"><span class="material-symbols-outlined">delete</span></button>
+                    <button :aria-label="`Remove ${authToken.appName} authorization`" @click="deleteCompanionAuthToken(authToken.appId)">
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
                   </td>
                 </tr>
               </tbody>
             </table>
             <div v-if="companionServerAuthTokens.length === 0" class="no-authorized-companions">
-              <td>No authorized companions</td>
+              <p>No authorized companions</p>
             </div>
           </YTMDSetting>
-          <YTMDSetting v-model="discordPresenceEnabled" type="checkbox" name="Discord rich presence" @change="settingsChanged" />
           <YTMDSetting
-            v-if="discordPresenceEnabled"
+            v-model="discordPresenceEnabled"
+            type="checkbox"
+            name="Discord rich presence"
+            description="Share your listening activity and customize the Discord application ID."
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="discordPresenceEnabled || searching"
+            :disabled="!discordPresenceEnabled"
+            disabled-message="Enable Discord rich presence in Integrations to change the application ID."
             type="custom"
             flex-column
             indented
@@ -512,54 +607,61 @@ window.ytmd.handleUpdateDownloaded(() => {
           >
             <input
               v-model="discordPresenceClientId"
+              :disabled="!discordPresenceEnabled"
               class="discord-client-id"
+              aria-label="Discord application ID"
               inputmode="numeric"
               placeholder="Default (YouTube Music)"
               @change="settingsChanged"
             />
             <a class="discord-portal-link" href="https://discord.com/developers/applications" target="_blank">Open Discord Developer Portal</a>
           </YTMDSetting>
-          <div v-if="discordPresenceEnabled && discordPresenceConnected" class="setting indented">
-            <div class="name-with-description">
-              <p class="discord-connected">
-                Connected to Discord<template v-if="discordPresenceUsername"> as {{ discordPresenceUsername }}</template>
-              </p>
-              <p class="discord-failure">
-                The status appears while a song is playing. Nothing on your profile? In Discord, turn on Settings → Activity Privacy → Share my activity, and
-                make sure your status isn't set to Invisible.
-              </p>
+          <YTMDSetting v-if="discordPresenceEnabled" type="custom" name="Discord connection" flex-column indented>
+            <div v-if="discordPresenceConnected" class="setting indented">
+              <div class="name-with-description">
+                <p class="discord-connected">
+                  Connected to Discord<template v-if="discordPresenceUsername"> as {{ discordPresenceUsername }}</template>
+                </p>
+                <p class="discord-failure">
+                  The status appears while a song is playing. Nothing on your profile? In Discord, turn on Settings → Activity Privacy → Share my activity, and
+                  make sure your status isn't set to Invisible.
+                </p>
+              </div>
             </div>
-          </div>
-          <div v-else-if="discordPresenceEnabled && discordPresenceConnectionFailed" class="setting indented">
-            <p class="discord-failure">
-              Discord was not found. The Discord desktop app has to be running, the browser version can't show a status. Still looking in the background.
-            </p>
-            <button @click="restartDiscordPresence">Retry</button>
-          </div>
-          <div v-else-if="discordPresenceEnabled" class="setting indented">
-            <p class="discord-failure">Looking for Discord…</p>
-          </div>
+            <div v-else-if="discordPresenceConnectionFailed" class="setting indented">
+              <p class="discord-failure">
+                Discord was not found. The Discord desktop app has to be running, the browser version can't show a status. Still looking in the background.
+              </p>
+              <button @click="restartDiscordPresence">Retry</button>
+            </div>
+            <div v-else class="setting indented">
+              <p class="discord-failure">Looking for Discord…</p>
+            </div>
+          </YTMDSetting>
           <YTMDSetting
             v-model="lastFMEnabled"
             type="checkbox"
             name="Last.fm scrobbling"
+            description="Connect your Last.fm account and choose the scrobble percent."
             :disabled="!safeStorageAvailable"
             disabled-message="This integration cannot be enabled due to safeStorage being unavailable"
             @change="settingsChanged"
           />
-          <div v-if="lastFMEnabled" class="setting indented">
+          <YTMDSetting v-if="lastFMEnabled" type="custom" name="Last.fm account" indented>
             <div class="name-with-description">
               <p class="description">
                 User is Authenticated:
-                <span v-if="lastFMSessionKey" style="color: #4caf50">Yes</span>
-                <span v-else style="color: #ff1100">No</span>
+                <span v-if="lastFMSessionKey" class="status-success">Yes</span>
+                <span v-else class="status-error">No</span>
               </p>
             </div>
             <button v-if="lastFMSessionKey" @click="logoutLastFM">Logout</button>
-          </div>
+          </YTMDSetting>
           <YTMDSetting
-            v-if="lastFMEnabled"
+            v-if="lastFMEnabled || searching"
             v-model="scrobblePercent"
+            :disabled="!lastFMEnabled"
+            disabled-message="Enable Last.fm scrobbling in Integrations to change this setting."
             class="settings indented"
             type="range"
             name="Scrobble percent"
@@ -569,460 +671,654 @@ window.ytmd.handleUpdateDownloaded(() => {
             step="5"
             @change="settingsChanged"
           />
-        </div>
+        </SettingsSection>
 
-        <div v-if="currentTab === 5" class="shortcuts-tab">
-          <div class="setting">
-            <p class="shortcut-title">
-              Play/Pause<span
-                v-if="shortcutsPlayPauseRegisterFailed"
-                class="material-symbols-outlined register-error"
-                title="Failed to register keybind. Does another application have this keybind?"
-                >error</span
-              >
-            </p>
+        <SettingsSection
+          v-show="sectionVisible(5)"
+          :section="5"
+          title="Shortcuts"
+          description="Select a shortcut and press your keys. Press Escape to clear it."
+          class="shortcuts-tab"
+        >
+          <YTMDSetting type="custom" name="Play/Pause">
+            <template #name>
+              <span class="shortcut-title"
+                ><SettingsSearchText text="Play/Pause" :query="query" /><span
+                  v-if="shortcutsPlayPauseRegisterFailed"
+                  class="material-symbols-outlined register-error"
+                  title="Failed to register keybind. Does another application have this keybind?"
+                  >error</span
+                >
+              </span>
+            </template>
             <KeybindInput v-model="shortcutPlayPause" @change="settingsChanged" />
-          </div>
-          <div class="setting">
-            <p class="shortcut-title">
-              Next<span
-                v-if="shortcutsNextRegisterFailed"
-                class="material-symbols-outlined register-error"
-                title="Failed to register keybind. Does another application have this keybind?"
-                >error</span
-              >
-            </p>
+          </YTMDSetting>
+          <YTMDSetting type="custom" name="Next">
+            <template #name>
+              <span class="shortcut-title"
+                ><SettingsSearchText text="Next" :query="query" /><span
+                  v-if="shortcutsNextRegisterFailed"
+                  class="material-symbols-outlined register-error"
+                  title="Failed to register keybind. Does another application have this keybind?"
+                  >error</span
+                >
+              </span>
+            </template>
             <KeybindInput v-model="shortcutNext" @change="settingsChanged" />
-          </div>
-          <div class="setting">
-            <p class="shortcut-title">
-              Previous<span
-                v-if="shortcutsPreviousRegisterFailed"
-                class="material-symbols-outlined register-error"
-                title="Failed to register keybind. Does another application have this keybind?"
-                >error</span
-              >
-            </p>
+          </YTMDSetting>
+          <YTMDSetting type="custom" name="Previous">
+            <template #name>
+              <span class="shortcut-title"
+                ><SettingsSearchText text="Previous" :query="query" /><span
+                  v-if="shortcutsPreviousRegisterFailed"
+                  class="material-symbols-outlined register-error"
+                  title="Failed to register keybind. Does another application have this keybind?"
+                  >error</span
+                >
+              </span>
+            </template>
             <KeybindInput v-model="shortcutPrevious" @change="settingsChanged" />
-          </div>
-          <div class="setting">
-            <p class="shortcut-title">
-              Thumbs Up<span
-                v-if="shortcutsThumbsUpRegisterFailed"
-                class="material-symbols-outlined register-error"
-                title="Failed to register keybind. Does another application have this keybind?"
-                >error</span
-              >
-            </p>
+          </YTMDSetting>
+          <YTMDSetting type="custom" name="Thumbs Up">
+            <template #name>
+              <span class="shortcut-title"
+                ><SettingsSearchText text="Thumbs Up" :query="query" /><span
+                  v-if="shortcutsThumbsUpRegisterFailed"
+                  class="material-symbols-outlined register-error"
+                  title="Failed to register keybind. Does another application have this keybind?"
+                  >error</span
+                >
+              </span>
+            </template>
             <KeybindInput v-model="shortcutThumbsUp" @change="settingsChanged" />
-          </div>
-          <div class="setting">
-            <p class="shortcut-title">
-              Thumbs Down<span
-                v-if="shortcutsThumbsDownRegisterFailed"
-                class="material-symbols-outlined register-error"
-                title="Failed to register keybind. Does another application have this keybind?"
-                >error</span
-              >
-            </p>
+          </YTMDSetting>
+          <YTMDSetting type="custom" name="Thumbs Down">
+            <template #name>
+              <span class="shortcut-title"
+                ><SettingsSearchText text="Thumbs Down" :query="query" /><span
+                  v-if="shortcutsThumbsDownRegisterFailed"
+                  class="material-symbols-outlined register-error"
+                  title="Failed to register keybind. Does another application have this keybind?"
+                  >error</span
+                >
+              </span>
+            </template>
             <KeybindInput v-model="shortcutThumbsDown" @change="settingsChanged" />
-          </div>
-          <div class="setting">
-            <p class="shortcut-title">
-              Increase Volume<span
-                v-if="shortcutsVolumeUpRegisterFailed"
-                class="material-symbols-outlined register-error"
-                title="Failed to register keybind. Does another application have this keybind?"
-                >error</span
-              >
-            </p>
+          </YTMDSetting>
+          <YTMDSetting type="custom" name="Increase Volume">
+            <template #name>
+              <span class="shortcut-title"
+                ><SettingsSearchText text="Increase Volume" :query="query" /><span
+                  v-if="shortcutsVolumeUpRegisterFailed"
+                  class="material-symbols-outlined register-error"
+                  title="Failed to register keybind. Does another application have this keybind?"
+                  >error</span
+                >
+              </span>
+            </template>
             <KeybindInput v-model="shortcutVolumeUp" @change="settingsChanged" />
-          </div>
-          <div class="setting">
-            <p class="shortcut-title">
-              Decrease Volume<span
-                v-if="shortcutsVolumeDownRegisterFailed"
-                class="material-symbols-outlined register-error"
-                title="Failed to register keybind. Does another application have this keybind?"
-                >error</span
-              >
-            </p>
+          </YTMDSetting>
+          <YTMDSetting type="custom" name="Decrease Volume">
+            <template #name>
+              <span class="shortcut-title"
+                ><SettingsSearchText text="Decrease Volume" :query="query" /><span
+                  v-if="shortcutsVolumeDownRegisterFailed"
+                  class="material-symbols-outlined register-error"
+                  title="Failed to register keybind. Does another application have this keybind?"
+                  >error</span
+                >
+              </span>
+            </template>
             <KeybindInput v-model="shortcutVolumeDown" @change="settingsChanged" />
-          </div>
-        </div>
+          </YTMDSetting>
+        </SettingsSection>
 
-        <div v-if="currentTab === 99" class="about-tab">
-          <img class="icon" :src="logo" />
-          <h2 class="app-name">YouTube Music Premium</h2>
-          <p class="made-by">Made by Skorbjen and 4tjoi</p>
-          <template v-if="!autoUpdaterDisabled">
-            <button
-              v-if="!updateDownloaded"
-              :disabled="!(!checkingForUpdate && !updateAvailable && !updateDownloaded)"
-              class="update-check-button"
-              @click="checkForUpdates"
-            >
-              <span class="material-symbols-outlined">update</span>Check for updates
-            </button>
-            <button v-if="updateDownloaded" class="update-button" @click="restartApplicationForUpdate">
-              <span class="material-symbols-outlined">upgrade</span>Restart to update
-            </button>
-            <p v-if="checkingForUpdate && !updateAvailable && !updateDownloaded" class="updating">
-              <span class="material-symbols-outlined">progress_activity</span>Checking for updates...
-            </p>
-            <p v-if="updateAvailable && !updateDownloaded" class="updating">
-              <span class="material-symbols-outlined">progress_activity</span>Downloading update...
-            </p>
-            <p v-if="updateNotAvailable" class="no-update">Update not available</p>
-          </template>
-          <template v-if="autoUpdaterDisabled">
-            <button disabled class="update-check-button"><span class="material-symbols-outlined">update</span>Check for updates</button>
-            <p class="no-auto-updater">Auto updater disabled</p>
-          </template>
-          <span class="version-info">
-            <p class="version">Version: {{ ytmdVersion }}</p>
-            <p class="branch">Branch: {{ ytmdBranch }}</p>
-            <p class="commit">Commit: {{ ytmdCommitHash }}</p>
-          </span>
-          <div class="links">
-            <a href="https://github.com/v3slx/youtube-music-premium" target="_blank">GitHub</a>
-          </div>
-        </div>
-      </div>
+        <SettingsSection v-show="sectionVisible(6)" :section="6" title="Advanced" description="Customize styles and rendering behavior." class="advanced-tab">
+          <YTMDSetting
+            v-model="disableHardwareAcceleration"
+            type="checkbox"
+            restart-required
+            name="Disable hardware acceleration"
+            @change="settingChangedRequiresRestart"
+          />
+          <YTMDSetting
+            v-model="customCSSEnabled"
+            type="checkbox"
+            name="Custom CSS"
+            description="Choose a CSS file path to customize the player."
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="customCSSEnabled || searching"
+            v-model="customCSSPath"
+            :disabled="!customCSSEnabled"
+            disabled-message="Enable Custom CSS in Advanced to choose a file."
+            type="file"
+            indented
+            bind-setting="appearance.customCSSPath"
+            name="Custom CSS file path"
+            @file-change="settingChangedFile"
+            @clear="removeCustomCSSPath"
+          />
+        </SettingsSection>
+
+        <SettingsSection v-show="sectionVisible(99)" :section="99" title="About" description="App information and updates." class="about-tab">
+          <YTMDSetting
+            type="custom"
+            name="YouTube Music Premium"
+            :description="`Version ${ytmdVersion}. Check for updates, app information and GitHub.`"
+            flex-column
+            class="about-details"
+          >
+            <img class="icon" :src="logo" alt="YouTube Music Premium logo" />
+            <p class="made-by">Made by Skorbjen and 4tjoi</p>
+            <template v-if="!autoUpdaterDisabled">
+              <button
+                v-if="!updateDownloaded"
+                :disabled="!(!checkingForUpdate && !updateAvailable && !updateDownloaded)"
+                class="update-check-button"
+                @click="checkForUpdates"
+              >
+                <span class="material-symbols-outlined">update</span>Check for updates
+              </button>
+              <button v-if="updateDownloaded" class="update-button" @click="restartApplicationForUpdate">
+                <span class="material-symbols-outlined">upgrade</span>Restart to update
+              </button>
+              <p v-if="checkingForUpdate && !updateAvailable && !updateDownloaded" class="updating">
+                <span class="material-symbols-outlined">progress_activity</span>Checking for updates...
+              </p>
+              <p v-if="updateAvailable && !updateDownloaded" class="updating">
+                <span class="material-symbols-outlined">progress_activity</span>Downloading update...
+              </p>
+              <p v-if="updateNotAvailable" class="no-update">Update not available</p>
+            </template>
+            <template v-if="autoUpdaterDisabled">
+              <button disabled class="update-check-button"><span class="material-symbols-outlined">update</span>Check for updates</button>
+              <p class="no-auto-updater">Auto updater disabled</p>
+            </template>
+            <div class="version-info">
+              <p class="version">Version: {{ ytmdVersion }}</p>
+              <p class="branch">Branch: {{ ytmdBranch }}</p>
+              <p class="commit">Commit: {{ ytmdCommitHash }}</p>
+            </div>
+            <div class="links">
+              <a href="https://github.com/v3slx/youtube-music-premium" target="_blank">GitHub</a>
+            </div>
+          </YTMDSetting>
+        </SettingsSection>
+      </main>
     </div>
   </div>
 </template>
 
 <style scoped>
-.settings-container {
+.settings-container.settings {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  color: var(--ytmd-text);
+  background: var(--ytmd-background);
+  border-top: 1px solid var(--ytmd-border);
+  font-size: 13px;
   user-select: none;
 }
 
-.content-container {
+.settings-toolbar {
+  display: grid;
+  grid-template-columns: 156px minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  padding: 22px 24px 20px;
+  border-bottom: 1px solid var(--ytmd-border);
+}
+
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+.search-field {
   display: flex;
-  height: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  min-height: 40px;
+  background: var(--ytmd-surface);
+  border: 1px solid var(--ytmd-border);
+  border-radius: 8px;
+  color: var(--ytmd-muted);
 }
 
-.content {
-  overflow: auto;
-  flex-grow: 1;
-  padding: 4px 16px;
+.search-field:focus-within {
+  border-color: var(--ytmd-accent);
+  outline: 1px solid var(--ytmd-accent);
 }
 
-.content::-webkit-scrollbar {
-  width: 12px;
+.search-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ytmd-text);
 }
 
-.content::-webkit-scrollbar-track {
-  background: #212121;
+.search-field input::placeholder {
+  color: var(--ytmd-muted);
 }
 
-.content::-webkit-scrollbar-thumb {
-  background-color: #414141;
+.search-field input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.content-container {
+  display: grid;
+  grid-template-columns: 188px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
 }
 
 .sidebar {
-  width: 25%;
-  min-width: 25%;
-  list-style-type: none;
-  margin: unset;
-  padding: unset;
-  height: 100%;
-  border-right: 1px solid #212121;
   display: flex;
   flex-direction: column;
+  gap: 5px;
+  padding: 20px 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--ytmd-border);
+  background: var(--ytmd-surface);
 }
 
-.sidebar li {
+button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid var(--ytmd-border);
+  border-radius: 6px;
+  color: var(--ytmd-text);
+  background: var(--ytmd-raised);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--ytmd-hover);
+}
+
+button:active:not(:disabled) {
+  border-color: var(--ytmd-muted);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--ytmd-accent);
+  outline-offset: 3px;
+}
+
+.sidebar button {
+  flex-shrink: 0;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 40px;
+  padding: 9px 12px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ytmd-muted);
+  text-align: left;
+}
+
+.sidebar button.active {
+  color: var(--ytmd-text);
+  background: var(--ytmd-raised);
+  font-weight: 600;
+}
+
+.sidebar button.active .material-symbols-outlined {
+  color: var(--ytmd-accent);
+}
+
+.sidebar button.about-link {
+  margin-top: auto;
+}
+
+.material-symbols-outlined {
+  font-size: 20px;
+}
+
+.sidebar-empty,
+.search-summary {
+  margin: 0 0 16px;
+  color: var(--ytmd-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.match-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.content {
+  min-width: 0;
+  padding: 24px 28px 32px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scroll-padding-top: 24px;
+}
+
+.content,
+.sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ytmd-hover) transparent;
+}
+
+.content > :first-child {
+  margin-top: 0;
+}
+
+.content.searching :deep(.settings-section) {
+  margin-top: 24px;
+}
+
+.empty-search {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 32px 0;
+}
+
+.empty-search > .material-symbols-outlined {
+  font-size: 32px;
+  color: var(--ytmd-muted);
+}
+
+.empty-search h2,
+.empty-search p {
+  margin: 0;
+}
+
+.empty-search h2 {
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.empty-search p {
+  color: var(--ytmd-muted);
+  line-height: 1.6;
+}
+
+.search-field .clear-search {
+  min-height: 26px;
+  padding: 3px;
+  border: 0;
+  background: transparent;
+}
+
+.restart-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 12px;
+  border: 1px solid var(--ytmd-border);
+  border-radius: 8px;
+  background: var(--ytmd-surface);
+}
+
+.restart-banner .message {
   display: flex;
   align-items: center;
-  padding: 16px;
-  cursor: pointer;
-  color: #bbbbbb;
+  gap: 8px;
+  margin: 0;
+  line-height: 1.5;
 }
 
-.sidebar li .material-symbols-outlined {
-  font-size: 28px;
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 100,
-    "GRAD" 0,
-    "opsz" 28;
+.restart-banner .material-symbols-outlined {
+  color: var(--ytmd-accent);
 }
 
-.sidebar li:hover {
-  background-color: #111111;
+.restart-banner button,
+.update-button {
+  background: var(--ytmd-accent);
+  color: var(--ytmd-on-accent);
+  border-color: transparent;
 }
 
-.sidebar li.active {
-  background-color: #212121;
-  color: #eeeeee;
-}
-
-.sidebar li .material-symbols-outlined {
-  margin-right: 8px;
-}
-
-.sidebar .push {
-  flex-grow: 1;
+.restart-banner button:hover,
+.update-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ytmd-accent) 85%, white);
 }
 
 .setting {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
+  line-height: 1.6;
 }
 
-.setting.indented {
-  margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid #212121;
-}
-
-.name-with-description .name {
-  margin-bottom: unset;
-}
-
-.name-with-description .description {
-  margin-top: 4px;
-  color: #969696;
-}
-
-.about-tab {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  height: 100%;
-}
-
-.icon {
-  width: 128px;
-  height: 128px;
-  margin-bottom: 16px;
-}
-
-.app-name {
+.name-with-description p {
   margin: 0;
+  line-height: 1.6;
 }
 
-.version-info .version,
-.version-info .branch,
-.version-info .commit {
-  margin: 4px 0;
-  color: #bbbbbb;
+.discord-failure {
+  margin: 0;
+  color: var(--ytmd-muted);
+  font:
+    12px/1.7 "Open Sans",
+    sans-serif;
 }
 
-.made-by {
-  margin: 16px 0;
+.discord-connected,
+.status-success {
+  color: var(--ytmd-success);
 }
 
-.links {
-  margin-top: 32px;
+.discord-connected {
+  margin: 0 0 6px;
+}
+
+.status-error,
+.register-error {
+  color: var(--ytmd-danger);
+}
+
+.discord-client-id {
+  box-sizing: border-box;
   width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ytmd-border);
+  border-radius: 6px;
+  background: var(--ytmd-raised);
+}
+
+a {
+  color: var(--ytmd-text);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--ytmd-accent);
+}
+
+.discord-portal-link {
+  font-size: 12px;
+}
+
+.audio-output-actions {
   display: flex;
-  justify-content: space-evenly;
-}
-
-.links a {
-  color: #bbbbbb;
-}
-
-.restart-banner {
-  background-color: #f44336;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.restart-banner .message {
-  display: flex;
-  align-items: center;
-}
-
-.restart-banner .message .material-symbols-outlined {
-  margin: 0 8px;
-}
-
-.restart-banner .restart-button {
-  margin: 0 8px;
-  background-color: transparent;
-  border: 1px solid #ffffff;
-  border-radius: 4px;
-  padding: 8px 16px;
-  cursor: pointer;
-}
-
-.update-check-button {
-  display: flex;
-  align-items: center;
-  background-color: transparent;
-  border: 1px solid #ffffff;
-  border-radius: 4px;
-  padding: 4px 8px;
-  margin-bottom: 8px;
-  cursor: pointer;
-}
-
-.update-check-button:disabled {
-  border: 1px solid #888888;
-  cursor: not-allowed;
-}
-
-.updating,
-.no-update {
-  display: flex;
-  align-items: center;
-  color: #888888;
-  margin: 0 0 8px 0;
-}
-
-.no-auto-updater {
-  display: flex;
-  align-items: center;
-  color: #888888;
-  margin: 0 0 8px 0;
-}
-
-.updating .material-symbols-outlined {
-  animation: rotation 1s infinite linear;
-}
-
-@keyframes rotation {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(359deg);
-  }
-}
-
-.update-button {
-  display: flex;
-  align-items: center;
-  background-color: #f44336;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  margin-bottom: 8px;
-  cursor: pointer;
-}
-
-.update-check-button .material-symbols-outlined,
-.updating .material-symbols-outlined,
-.update-button .material-symbols-outlined {
-  margin-right: 4px;
-}
-
-.version-info {
-  user-select: text;
-}
-
-.setting.disabled {
-  color: #c6c6c6;
+  flex-basis: 100%;
+  justify-content: flex-end;
 }
 
 .authorized-companions-table {
   width: 100%;
   table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
 }
 
-.authorized-companions-table tr .companion {
-  width: 70%;
-  word-wrap: break-word;
-}
-
-.authorized-companions-table tr .companion .id {
-  color: #969696;
-  font-size: 14px;
-}
-
-.authorized-companions-table tbody tr .version {
-  word-wrap: break-word;
-}
-
-.authorized-companions-table tr th,
-.authorized-companions-table tr td {
-  padding: 4px;
+.authorized-companions-table th,
+.authorized-companions-table td {
+  padding: 8px 4px;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .authorized-companions-table th {
-  text-align: left;
+  color: var(--ytmd-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--ytmd-border);
 }
 
-.authorized-companions-table thead tr th {
-  border-bottom: 1px solid #212121;
-}
-.authorized-companions-table thead tr .controls {
-  width: 48px;
+.authorized-companions-table .companion {
+  width: 60%;
 }
 
-.authorized-companions-table tbody button {
-  border-radius: 4px;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  background-color: #212121;
-  cursor: pointer;
-  border: none;
+.authorized-companions-table .controls {
+  width: 38px;
 }
 
+.authorized-companions-table .id,
 .no-authorized-companions {
-  color: #bbbbbb;
-  padding: 4px;
+  color: var(--ytmd-muted);
 }
 
-.discord-failure {
+.authorized-companions-table button {
+  padding: 6px;
+}
+
+.shortcut-title {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.shortcuts-tab :deep(.keybind) {
+  min-width: 0;
+  width: 206px;
+  border: 1px solid var(--ytmd-border);
+  border-radius: 6px;
+  background: var(--ytmd-raised);
+}
+
+.shortcuts-tab :deep(.keybind.is-editing),
+.shortcuts-tab :deep(.keybind:focus-within) {
+  outline: 2px solid var(--ytmd-accent);
+  outline-offset: 2px;
+}
+
+.shortcuts-tab :deep(.keybind-text) {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: auto;
+  padding: 9px 10px;
+  background: transparent;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.shortcuts-tab :deep(.remove) {
+  border-color: var(--ytmd-border);
+  color: var(--ytmd-muted);
+  background: transparent;
+}
+
+.shortcuts-tab :deep(.remove:hover:not(:disabled)) {
+  color: var(--ytmd-text);
+  background: var(--ytmd-hover);
+}
+
+.icon {
+  width: 64px;
+  height: 64px;
+}
+
+.about-details {
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.made-by,
+.version-info p,
+.updating,
+.no-update,
+.no-auto-updater {
   margin: 0;
-  color: #969696;
+  color: var(--ytmd-muted);
+  line-height: 1.6;
 }
 
-.discord-connected {
-  margin: 0 0 4px;
-  color: #4caf50;
+.version-info {
+  user-select: text;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
-.audio-output-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-
-.discord-client-id {
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 8px;
-  padding: 8px;
-  color: #ffffff;
-  background-color: #212121;
-  border: 1px solid #424242;
-  border-radius: 4px;
-}
-
-.discord-portal-link {
-  margin-top: 6px;
-  color: #bbbbbb;
-}
-
-button {
-  margin: 3px 3px 3px 4px;
-  border-radius: 4px;
-  padding: 8px;
+.updating {
   display: flex;
   align-items: center;
-  background-color: #212121;
-  cursor: pointer;
-  border: none;
+  gap: 8px;
 }
 
-.shortcuts-tab .shortcut-title {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.updating .material-symbols-outlined {
+  animation: rotation 1.5s linear infinite;
 }
 
-.shortcuts-tab .shortcut-title .register-error {
-  margin-left: 4px;
-  color: #f44336;
+@keyframes rotation {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-toolbar {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 16px;
+  }
+  .content-container {
+    grid-template-columns: 150px minmax(0, 1fr);
+  }
+  .sidebar {
+    padding: 16px 8px;
+  }
+  .sidebar button {
+    padding: 9px 8px;
+    gap: 6px;
+  }
+  .content {
+    padding: 20px 16px;
+  }
+  .shortcuts-tab :deep(.keybind) {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+  .updating .material-symbols-outlined {
+    animation: none;
+  }
 }
 </style>

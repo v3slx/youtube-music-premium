@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { onBeforeMount, ref } from "vue";
+import { useTheme } from "../composables/useTheme";
+
+useTheme();
 
 const props = defineProps({
   title: {
@@ -72,8 +75,8 @@ if (props.isMainWindow) {
   <div v-if="!windowFullscreen" class="titlebar">
     <div class="left">
       <div class="title">
-        <span v-if="icon" class="icon material-symbols-outlined">{{ icon }}</span>
-        <img v-if="iconFile" class="icon" :src="iconFile" />
+        <span v-if="icon" class="icon material-symbols-outlined" aria-hidden="true">{{ icon }}</span>
+        <img v-if="iconFile" class="icon" :src="iconFile" alt="" draggable="false" />
         <p v-if="title && !centerTitleText" class="title-text">{{ title }}{{ ytmViewUnresponsive ? " (Unresponsive)" : "" }}</p>
       </div>
     </div>
@@ -84,35 +87,61 @@ if (props.isMainWindow) {
       <div v-if="isMainWindow" class="update-buttons">
         <button
           v-if="appUpdateDownloaded"
+          type="button"
           class="app-button update-button"
           tabindex="1"
-          title="Update ready! Click to restart"
+          title="Restart to update"
+          aria-label="Restart to update"
           @click="restartApplicationForUpdate"
         >
-          <span class="material-symbols-outlined">upgrade</span>
+          <span class="material-symbols-outlined" aria-hidden="true">upgrade</span>
         </button>
       </div>
       <div class="app-buttons">
         <slot name="app-buttons"></slot>
-        <button v-if="hasHomeButton" class="app-button" tabindex="2" @click="navigateToDefault">
-          <span class="material-symbols-outlined">home</span>
+        <button v-if="hasHomeButton" type="button" class="app-button" tabindex="2" title="Home" aria-label="Home" @click="navigateToDefault">
+          <span class="material-symbols-outlined" aria-hidden="true">home</span>
         </button>
-        <button v-if="hasSettingsButton" class="app-button" tabindex="3" @click="openSettingsWindow">
-          <span class="material-symbols-outlined">settings</span>
+        <button v-if="hasSettingsButton" type="button" class="app-button" tabindex="3" title="Settings" aria-label="Settings" @click="openSettingsWindow">
+          <span class="material-symbols-outlined" aria-hidden="true">settings</span>
         </button>
       </div>
       <div v-if="!wcoVisible" class="windows-action-buttons">
-        <button v-if="hasMinimizeButton" class="action-button window-minimize" tabindex="4" @click="minimizeWindow">
-          <span class="material-symbols-outlined">remove</span>
+        <button
+          v-if="hasMinimizeButton"
+          type="button"
+          class="action-button window-minimize"
+          tabindex="4"
+          title="Minimize"
+          aria-label="Minimize window"
+          @click="minimizeWindow"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">remove</span>
         </button>
-        <button v-if="hasMaximizeButton && !windowMaximized" class="action-button window-maximize" tabindex="5" @click="maximizeWindow">
-          <span class="material-symbols-outlined">square</span>
+        <button
+          v-if="hasMaximizeButton && !windowMaximized"
+          type="button"
+          class="action-button window-maximize"
+          tabindex="5"
+          title="Maximize"
+          aria-label="Maximize window"
+          @click="maximizeWindow"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">square</span>
         </button>
-        <button v-if="hasMinimizeButton && windowMaximized" class="action-button window-restore" tabindex="6" @click="restoreWindow">
-          <span class="material-symbols-outlined">filter_none</span>
+        <button
+          v-if="hasMaximizeButton && windowMaximized"
+          type="button"
+          class="action-button window-restore"
+          tabindex="6"
+          title="Restore"
+          aria-label="Restore window"
+          @click="restoreWindow"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">filter_none</span>
         </button>
-        <button class="action-button window-close" tabindex="7" @click="closeWindow">
-          <span class="material-symbols-outlined">close</span>
+        <button type="button" class="action-button window-close" tabindex="7" title="Close" aria-label="Close window" @click="closeWindow">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
     </div>
@@ -121,48 +150,77 @@ if (props.isMainWindow) {
 
 <style scoped>
 .titlebar {
+  box-sizing: border-box;
+  position: relative;
   left: env(titlebar-area-x, 0);
   width: env(titlebar-area-width, 100%);
   height: 36px;
+  flex-shrink: 0;
   user-select: none;
   -webkit-app-region: drag;
-  background-color: #000000;
+  background-color: var(--ytmd-background, #101113);
+  color: var(--ytmd-text, #eeeeee);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  position: relative;
 }
 
 .titlebar .left,
 .titlebar .right {
   display: flex;
   align-items: center;
-  justify-content: center;
 }
 
 .titlebar .left {
-  margin-left: 4px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.titlebar .right {
+  flex-shrink: 0;
+  height: 100%;
+  gap: 8px;
+}
+
+.titlebar .center {
+  position: absolute;
+  left: 50%;
+  max-width: 45%;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .titlebar .right .app-buttons {
   display: flex;
-  flex-direction: row;
-  margin-right: 16px;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+}
+
+.titlebar .right .app-buttons:empty,
+.update-buttons:empty {
+  display: none;
+}
+
+.app-buttons,
+.update-buttons,
+.windows-action-buttons {
+  -webkit-app-region: no-drag;
 }
 
 .title {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .title .icon {
-  margin-left: 8px;
-  margin-right: 8px;
-  font-size: 13px;
+  flex-shrink: 0;
+  color: var(--ytmd-muted, #a3a5ad);
   font-variation-settings:
     "FILL" 0,
-    "wght" 100,
+    "wght" 300,
     "GRAD" 0,
     "opsz" 24;
   width: 16px;
@@ -177,100 +235,111 @@ if (props.isMainWindow) {
 }
 
 .title-text {
-  font-family: "Open Sans", sans-serif;
+  margin: 0;
+  font-family: "Work Sans", sans-serif;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
-  font-size: 14px;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 500;
 }
 
-.app-button {
-  margin-right: 4px;
-  height: 28px;
-  width: 28px;
+.app-button,
+.action-button {
+  box-sizing: border-box;
+  padding: 0;
   background: none;
-  color: #bbbbbb;
+  color: var(--ytmd-muted, #a3a5ad);
   display: flex;
   align-items: center;
   justify-content: center;
   -webkit-app-region: no-drag;
   border: none;
-  border-radius: 4px;
   font-variation-settings:
     "FILL" 0,
-    "wght" 200,
+    "wght" 300,
     "GRAD" 0,
-    "opsz" 28;
+    "opsz" 20;
   cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
-.app-button:hover {
-  background-color: #222222;
+.app-button {
+  height: 28px;
+  width: 30px;
+  border-radius: 6px;
+}
+
+.app-button:hover,
+.action-button:hover {
+  background-color: var(--ytmd-hover, #25272d);
+  color: var(--ytmd-text, #eeeeee);
+}
+
+.app-button:focus-visible,
+.action-button:focus-visible {
+  outline: 2px solid var(--ytmd-accent, #ff626b);
+  outline-offset: -3px;
+}
+
+.app-button:active,
+.action-button:active {
+  background-color: var(--ytmd-raised, #303239);
 }
 
 .app-button > .material-symbols-outlined {
   font-size: 20px;
-  color: #b4b4b4;
 }
 
-.app-buttons .divider {
-  margin: 2px 4px;
-  position: relative;
-}
-
-.app-buttons .divider:not(:last-child) {
-  margin: 2px 4px 2px 1px;
-  position: relative;
-}
-
-.app-buttons .divider:after {
-  content: "";
-  position: absolute;
-  border-left: 1px solid #666666;
-  right: 0;
-  height: 100%;
+.app-buttons :deep(.divider) {
+  align-self: center;
+  height: 16px;
+  margin: 0 4px;
+  border-left: 1px solid var(--ytmd-border, #303239);
+  pointer-events: none;
 }
 
 .action-button {
   width: 40px;
   height: 36px;
-  background: none;
-  color: #bbbbbb;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  -webkit-app-region: no-drag;
-  border: none;
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 100,
-    "GRAD" 0,
-    "opsz" 24;
-}
-
-.action-button:hover {
-  background-color: #222222;
+  border-radius: 0;
 }
 
 .action-button > .material-symbols-outlined {
-  font-size: 24px;
+  font-size: 18px;
 }
 
 .windows-action-buttons {
   display: flex;
-  margin-left: 8px;
+  height: 100%;
 }
 
 .window-restore > .material-symbols-outlined {
   transform: rotate(180deg);
 }
 
-.window-close:hover {
-  background-color: #e81123;
+.window-close:hover,
+.window-close:active {
+  color: #ffffff;
+  background-color: #c93542;
+}
+
+.window-close:focus-visible {
+  outline-color: var(--ytmd-text, #eeeeee);
 }
 
 .update-button {
-  color: #f44336;
-  margin-right: 24px;
+  color: var(--ytmd-accent, #ff626b);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-button,
+  .action-button {
+    transition: none;
+  }
 }
 </style>

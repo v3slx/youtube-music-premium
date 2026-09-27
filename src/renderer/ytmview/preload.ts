@@ -279,8 +279,7 @@ async function hookPlayerApiEvents() {
 }
 
 function overrideHistoryButtonDisplay() {
-  // @ts-expect-error Style is reported as readonly but this still works
-  document.querySelector<HTMLElement>("#history-link .history-button").style = "display: inline-block !important;";
+  document.querySelector<HTMLElement>("#history-link .history-button")?.style.setProperty("display", "inline-block", "important");
 }
 
 async function applyAudioOutputDevice(deviceId: string) {

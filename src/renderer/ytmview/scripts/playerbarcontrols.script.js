@@ -492,11 +492,19 @@
     }
   });
 
+  // Only redraw the buttons when the song's menu or the library state changed, not on every store action
+  let lastMenu;
+  let lastToggleStates;
+
   ytmStore.subscribe(() => {
     let state = ytmStore.getState();
 
     // Update library button for current data
     const currentMenu = document.querySelector("ytmusic-app-layout>ytmusic-player-bar").getMenuRenderer();
+    const toggleStates = state.toggleStates.feedbackToggleStates;
+    if (currentMenu === lastMenu && toggleStates === lastToggleStates) return;
+    lastMenu = currentMenu;
+    lastToggleStates = toggleStates;
     if (currentMenu) {
       if (playlistButton.classList.contains("hidden")) {
         playlistButton.classList.remove("hidden");

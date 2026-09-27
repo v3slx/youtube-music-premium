@@ -2,6 +2,10 @@
   const ytmStore = window.__YTMD_HOOK__.ytmStore;
   const playerApi = window.__YTMD_HOOK__.ytmPlayerBar.playerApi;
 
+  // The store changes on every UI action (hovering, opening menus, scrolling the queue). Only a change in
+  // what is actually sent may cross over to the app - the whole queue used to be sent every time.
+  let lastSent = null;
+
   function sendStoreState() {
     // We don't want to see everything in the store as there can be some sensitive data so we only send what's necessary to operate
     let state = ytmStore.getState();
@@ -16,10 +20,27 @@
     const adPlaying = state.player.adPlaying;
     const muted = state.player.muted;
 
+    // Redux replaces a slice when it changes, so comparing references is enough for the queue
+    if (
+      lastSent &&
+      lastSent.queue === state.queue &&
+      lastSent.likeStatus === likeStatus &&
+      lastSent.volume === volume &&
+      lastSent.muted === muted &&
+      lastSent.adPlaying === adPlaying
+    ) {
+      return;
+    }
+    lastSent = { queue: state.queue, likeStatus, volume, muted, adPlaying };
+
     window.ytmd.sendStoreUpdate(state.queue, likeStatus, volume, muted, adPlaying);
   }
 
+  let lastProgress = -1;
   playerApi.addEventListener("onVideoProgress", progress => {
+    // Paused or buffering, the player keeps reporting the same position
+    if (progress === lastProgress) return;
+    lastProgress = progress;
     window.ytmd.sendVideoProgress(progress);
   });
   playerApi.addEventListener("onStateChange", state => {

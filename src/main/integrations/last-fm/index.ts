@@ -20,6 +20,10 @@ export default class LastFM implements IIntegration {
   private lastfmDetails: StoreSchema["lastfm"] = null;
   private scrobbleTimer: NodeJS.Timeout | null = null;
   private playerStateFunction: (state: PlayerState) => void;
+  // One session request at a time, and the Last.fm sign-in page at most every few minutes -
+  // it used to be requested (and opened) again on every song while signed out
+  private sessionRequest: Promise<void> | null = null;
+  private lastAuthenticationPrompt = 0;
 
   private async createToken(): Promise<string> {
     const data: LastfmRequestBody = {
@@ -37,12 +41,27 @@ export default class LastFM implements IIntegration {
   }
 
   private async authenticateUser() {
+    if (Date.now() - this.lastAuthenticationPrompt < 5 * 60 * 1000) return;
+    this.lastAuthenticationPrompt = Date.now();
     this.lastfmDetails.token = await this.createToken();
+    if (!this.lastfmDetails.token) return;
     this.saveSettings();
 
     shell.openExternal(
       `https://www.last.fm/api/auth/` + `?api_key=${encodeURIComponent(this.lastfmDetails.api_key)}` + `&token=${encodeURIComponent(this.lastfmDetails.token)}`
     );
+  }
+
+  /** Never throws: offline or with Last.fm down the app keeps playing and tries again later. */
+  private requestSession() {
+    if (this.sessionRequest) return;
+    this.sessionRequest = this.getSession()
+      .catch(error => {
+        log.warn("Last.fm: could not get a session", error);
+      })
+      .finally(() => {
+        this.sessionRequest = null;
+      });
   }
 
   private async getSession() {
@@ -84,12 +103,13 @@ export default class LastFM implements IIntegration {
         return;
       }
 
-      // Store all the IDs of videos for this song.
-      this.possibleVideoIds = state.queue.items[state.queue.selectedItemIndex]?.counterparts?.map(item => item.videoId) || [];
-      this.possibleVideoIds.push(state.queue.items[state.queue.selectedItemIndex]?.videoId);
+      // Store all the IDs of videos for this song. Without a queue (a single song opened from a link) the song itself
+      const selectedItem = state.queue?.items?.[state.queue.selectedItemIndex];
+      this.possibleVideoIds = selectedItem?.counterparts?.map(item => item.videoId) || [];
+      this.possibleVideoIds.push(selectedItem?.videoId ?? state.videoDetails.id);
 
       if (!this.lastfmDetails || !this.lastfmDetails.sessionKey) {
-        this.getSession();
+        this.requestSession();
         return;
       }
 
@@ -152,23 +172,28 @@ export default class LastFM implements IIntegration {
     };
     data.api_sig = this.createApiSig(data, this.lastfmDetails.secret);
 
-    const response = fetch(`https://ws.audioscrobbler.com/2.0/`, {
-      method: "POST",
-      body: this.createBody(data)
-    });
+    let error: LastfmErrorResponse | null = null;
+    try {
+      const response = await fetch(`https://ws.audioscrobbler.com/2.0/`, {
+        method: "POST",
+        body: this.createBody(data)
+      });
+      // Last.fm reports its errors in the body, the request itself succeeds
+      const json = (await response.json().catch((): null => null)) as { error?: number; message?: string } | null;
+      if (json?.error) error = { code: json.error, message: json.message } as LastfmErrorResponse;
+    } catch (networkError) {
+      log.warn("Last.fm: request failed", networkError);
+      return;
+    }
 
-    response.catch((error: LastfmErrorResponse) => {
-      // Check Errors against https://www.last.fm/api/show/track.scrobble#errors
-      switch (error.code) {
-        case 9: // Invalid session key
-          this.lastfmDetails.sessionKey = null;
-          this.authenticateUser();
-          break;
-
-        default:
-          console.error(error);
-      }
-    });
+    // Check Errors against https://www.last.fm/api/show/track.scrobble#errors
+    if (error?.code === 9) {
+      // Invalid session key: the user revoked access or the session expired
+      this.lastfmDetails.sessionKey = null;
+      this.requestSession();
+    } else if (error) {
+      log.warn(`Last.fm: ${params.method} failed`, error);
+    }
   }
 
   // ----------------------------------------------------------
@@ -192,7 +217,7 @@ export default class LastFM implements IIntegration {
     this.lastfmDetails = this.getSettings();
 
     if (!this.lastfmDetails || !this.lastfmDetails.sessionKey) {
-      this.getSession();
+      this.requestSession();
     }
 
     this.playerStateFunction = (state: PlayerState) => this.updatePlayerState(state);

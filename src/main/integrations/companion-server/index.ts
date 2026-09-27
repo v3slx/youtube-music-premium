@@ -1,5 +1,5 @@
 import IIntegration from "../integration";
-import Fastify, { FastifyInstance } from "fastify";
+import Fastify, { FastifyError, FastifyInstance } from "fastify";
 import FastifyIO from "fastify-socket.io/dist/index";
 import CompanionServerAPIv1 from "./api/v1";
 import { MemoryStoreSchema, StoreSchema } from "~shared/store/schema";
@@ -50,7 +50,8 @@ export default class CompanionServer implements IIntegration {
         return this.memoryStore;
       }
     });
-    this.fastifyServer.setErrorHandler((error, request, reply) => {
+    this.fastifyServer.setErrorHandler((unknownError, request, reply) => {
+      const error = unknownError as FastifyError;
       if (!isDefinedAPIError(error)) {
         if (!error.statusCode || error.statusCode >= 500) {
           log.error(error);

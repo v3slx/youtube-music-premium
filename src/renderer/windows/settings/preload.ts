@@ -39,7 +39,7 @@ contextBridge.exposeInMainWorld("ytmd", {
     ipcRenderer.on("settingsWindow:stateChanged", callback),
   getAppVersion: async (): Promise<string> => await ipcRenderer.invoke("app:getVersion"),
   checkForUpdates: () => ipcRenderer.send("app:checkForUpdates"),
-  handleCheckingForUpdate: (callback: (event: Electron.IpcRendererEvent) => void) => ipcRenderer.on("app:checkingForUpdate", callback),
+  handleCheckingForUpdate: (callback: (event: Electron.IpcRendererEvent) => void) => ipcRenderer.on("app:checkingForUpdates", callback),
   handleUpdateAvailable: (callback: (event: Electron.IpcRendererEvent) => void) => ipcRenderer.on("app:updateAvailable", callback),
   handleUpdateNotAvailable: (callback: (event: Electron.IpcRendererEvent) => void) => ipcRenderer.on("app:updateNotAvailable", callback),
   handleUpdateDownloaded: (callback: (event: Electron.IpcRendererEvent) => void) => ipcRenderer.on("app:updateDownloaded", callback),

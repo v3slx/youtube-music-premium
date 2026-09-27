@@ -1,17 +1,75 @@
 @font-face {
-  font-family: 'Open Sans';
-  src: url("./fonts/OpenSans-VariableFont_wdth,wght.ttf") format('truetype');
+  font-family: "Open Sans";
+  src: url("./fonts/OpenSans-VariableFont_wdth,wght.ttf") format("truetype");
 }
 
 @font-face {
-  font-family: 'Work Sans';
-  src: url("./fonts/WorkSans-VariableFont_wght.ttf") format('truetype');
+  font-family: "Work Sans";
+  src: url("./fonts/WorkSans-VariableFont_wght.ttf") format("truetype");
 }
 
-html, body, #app {
+:root {
+  color-scheme: dark;
+  --ytmd-background: #111111;
+  --ytmd-surface: #191919;
+  --ytmd-raised: #242424;
+  --ytmd-hover: #303030;
+  --ytmd-text: #eeeeee;
+  --ytmd-accent: #ef7672;
+  --ytmd-on-accent: #231211;
+  --ytmd-danger: #ff938a;
+  --ytmd-success: #94cfaa;
+  --ytmd-muted: color-mix(in srgb, var(--ytmd-text) 68%, var(--ytmd-background));
+  --ytmd-border: color-mix(in srgb, var(--ytmd-text) 14%, var(--ytmd-background));
+}
+
+:root[data-theme="midnight"] {
+  --ytmd-background: #110f1b;
+  --ytmd-surface: #1b1728;
+  --ytmd-raised: #262036;
+  --ytmd-hover: #30283f;
+  --ytmd-text: #f6f1ff;
+}
+
+:root[data-theme="ocean"] {
+  --ytmd-background: #071921;
+  --ytmd-surface: #0c2430;
+  --ytmd-raised: #12303e;
+  --ytmd-hover: #1a4152;
+  --ytmd-text: #e4f7ff;
+}
+
+:root[data-theme="forest"] {
+  --ytmd-background: #0f1a12;
+  --ytmd-surface: #17261a;
+  --ytmd-raised: #1f3323;
+  --ytmd-hover: #2a432e;
+  --ytmd-text: #eff9eb;
+}
+
+html,
+body,
+#app {
   margin: 0;
   height: 100%;
-  color: #EEEEEE;
-  font-family: 'Work Sans', sans-serif;
+  color: var(--ytmd-text);
+  background-color: var(--ytmd-background);
+  font-family: "Work Sans", sans-serif;
   overflow: hidden;
+}
+
+button,
+input,
+select {
+  color: inherit;
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--ytmd-accent);
+  outline-offset: 3px;
 }
