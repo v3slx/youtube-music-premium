@@ -271,6 +271,7 @@
     if (!pick || song.lyrics?.source === source) return;
     song.chosenByUser = true;
     rememberSource(song.videoId, source);
+    if (fullscreenOpen) beginSwitch();
     setLyrics(pick);
   }
 
@@ -283,7 +284,11 @@
     activeLines.clear();
     activeItem = null;
     renderTab();
-    if (fullscreenOpen) renderFullscreen();
+    if (fullscreenOpen) {
+      // Lyrics that replace others on screen (a better source came in) swap with the same animation as a new song
+      if (fsTrack.childElementCount && !fsOverlay.classList.contains("switching")) beginSwitch();
+      renderFullscreen();
+    }
     updateTabVisibility();
     tick(true);
     kick();
@@ -761,18 +766,79 @@
       opacity: 0; transition: opacity 260ms ease;
     }
     .overlay.visible { opacity: 1; }
+    /* Every song paints a new layer that fades in over the last one */
+    .backdrops { position: absolute; inset: 0; overflow: hidden; }
+    .backdrop-layer { position: absolute; inset: 0; opacity: 0; transition: opacity 1400ms ease; }
+    .backdrop-layer.ready { opacity: 1; }
     .backdrop {
       position: absolute; left: 50%; top: 50%; width: 170vmax; height: 170vmax; margin: -85vmax 0 0 -85vmax;
-      image-rendering: auto; animation: drift 80s linear infinite; opacity: 0; transition: opacity 900ms ease;
+      image-rendering: auto; animation: drift 80s linear infinite;
     }
-    .backdrop.ready { opacity: 1; }
-    .backdrop.second { animation-duration: 110s; animation-direction: reverse; mix-blend-mode: screen; }
-    .backdrop.second.ready { opacity: 0.55; }
+    .backdrop.second { animation-duration: 110s; animation-direction: reverse; mix-blend-mode: screen; opacity: 0.55; }
     @keyframes drift { from { transform: rotate(0deg) scale(1.1); } 50% { transform: rotate(180deg) scale(1.25); } to { transform: rotate(360deg) scale(1.1); } }
     .shade { position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 45%, rgba(0,0,0,0.05), rgba(0,0,0,0.55)); }
     header { position: relative; z-index: 2; display: flex; align-items: center; gap: 18px; padding: 26px 40px 6px; }
-    .cover { width: 72px; height: 72px; flex-shrink: 0; border-radius: 10px; object-fit: cover; box-shadow: 0 14px 34px rgba(0,0,0,0.5); }
-    .meta { min-width: 0; flex: 1; }
+    .cover {
+      width: 72px; height: 72px; flex-shrink: 0; border-radius: 10px; object-fit: cover; box-shadow: 0 14px 34px rgba(0,0,0,0.5);
+      cursor: pointer; transition: transform 220ms ease, opacity 320ms ease;
+    }
+    .cover:hover { transform: scale(1.06); }
+    .meta { min-width: 0; flex: 1; transition: opacity 320ms ease; }
+    .overlay.cover-view header .cover, .overlay.cover-view header .meta,
+    .overlay.no-lyrics header .cover, .overlay.no-lyrics header .meta { opacity: 0; pointer-events: none; }
+    @keyframes swap-in { from { opacity: 0; transform: translateY(10px) scale(0.97); filter: blur(8px); } }
+    .swap-in { animation: swap-in 720ms cubic-bezier(0.2, 0.9, 0.25, 1) backwards; }
+
+    /* The large cover: left half next to the lyrics, or in the middle when a song has none */
+    .stage {
+      position: absolute; z-index: 1; left: 0; top: 0; bottom: 0; width: 50%; box-sizing: border-box;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; padding: 100px 48px 150px;
+      opacity: 0; pointer-events: none; transform: scale(0.94);
+      transition: opacity 520ms ease, transform 760ms cubic-bezier(0.2, 0.9, 0.25, 1);
+    }
+    .overlay.cover-view .stage, .overlay.no-lyrics .stage { opacity: 1; pointer-events: auto; transform: none; }
+    .overlay.no-lyrics .stage { width: 100%; }
+    .art-box { position: relative; width: min(100%, 58vh, 580px); aspect-ratio: 1; transition: transform 700ms cubic-bezier(0.34, 1.35, 0.64, 1); }
+    .overlay.paused .art-box { transform: scale(0.9); }
+    .art-glow {
+      position: absolute; left: -4%; top: 2%; width: 108%; height: 108%; border-radius: 50%;
+      opacity: 0.55; filter: blur(56px); pointer-events: none;
+    }
+    .art {
+      position: relative; display: block; width: 100%; height: 100%; border-radius: 14px; object-fit: cover; cursor: pointer;
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.07); animation: float 10s ease-in-out infinite;
+    }
+    .overlay.paused .art { animation-play-state: paused; }
+    @keyframes float { 0%, 100% { transform: translateY(0) rotate(-0.6deg); } 50% { transform: translateY(-12px) rotate(0.6deg) scale(1.012); } }
+    .stage-text { max-width: 100%; text-align: center; }
+    .stage-title, .stage-artist { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stage-title { margin: 0; font-size: clamp(20px, 2.1vw, 32px); font-weight: 800; line-height: 1.25; }
+    .stage-artist { margin: 6px 0 0; font-size: clamp(15px, 1.35vw, 20px); color: rgba(255, 255, 255, 0.72); }
+    .stage-note { display: none; margin: 16px 0 0; font-size: 14px; color: rgba(255, 255, 255, 0.55); }
+    .overlay.no-lyrics .stage-note { display: block; }
+    .overlay.cover-view .viewport { margin-left: 46%; }
+    .overlay.cover-view .track { padding: 0 56px 0 16px; }
+    .overlay.cover-view .line, .overlay.cover-view .interlude { font-size: clamp(24px, 2.6vw, 50px); }
+    .overlay.no-lyrics .viewport { visibility: hidden; }
+
+    /* Between two songs: the old lyrics drift up and away, the new ones come in from below */
+    .overlay.switching .track {
+      opacity: 0; transform: translateY(-36px); filter: blur(6px);
+      transition: opacity 380ms ease, transform 480ms cubic-bezier(0.4, 0, 0.2, 1), filter 380ms ease;
+    }
+    .track.relayout { opacity: 0; transition: opacity 180ms ease; }
+    @keyframes line-in { from { opacity: 0; translate: 0 46px; filter: blur(8px); } }
+    .track.entering .item { animation: line-in 780ms cubic-bezier(0.2, 0.9, 0.25, 1) backwards; animation-delay: calc(var(--i, 0) * 55ms); }
+    .loading {
+      position: absolute; z-index: 1; left: 50%; top: 46%; display: flex; gap: 10px; transform: translateX(-50%);
+      opacity: 0; pointer-events: none; transition: opacity 300ms ease;
+    }
+    .overlay.cover-view .loading { left: 73%; }
+    .overlay.switching .loading { opacity: 1; transition-delay: 700ms; }
+    .loading span { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.75); animation: pulse 1.2s ease-in-out infinite; }
+    .loading span:nth-child(2) { animation-delay: 0.15s; }
+    .loading span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes pulse { 0%, 100% { opacity: 0.25; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
     .title, .artist { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .title { font-size: 21px; font-weight: 700; }
     .artist { margin-top: 3px; font-size: 15px; color: rgba(255,255,255,0.72); }
@@ -794,7 +860,7 @@
     .close { width: 46px; height: 46px; padding: 0; justify-content: center; }
     .viewport {
       position: relative; z-index: 1; flex: 1; overflow: hidden; outline: none;
-      -webkit-mask-image: linear-gradient(transparent, #000 13%, #000 80%, transparent);
+      -webkit-mask-image: linear-gradient(transparent, #000 13%, #000 74%, transparent 97%);
     }
     .track { position: absolute; left: 0; right: 0; top: 0; padding: 0 max(40px, calc((100% - 1180px) / 2)); --y: 0px; }
     .item {
@@ -814,7 +880,6 @@
     .interlude.active { height: 0.6em; margin: 0 0 34px; opacity: 1; }
     ${interludeCss(".track")}
     .track.manual .item { transition: none; filter: none; }
-    .empty { position: absolute; z-index: 1; top: 50%; left: 0; right: 0; margin: 0; text-align: center; font-size: 20px; color: rgba(255,255,255,0.78); }
     .resume { position: absolute; z-index: 3; left: 50%; bottom: 150px; transform: translateX(-50%); background: rgba(20,20,24,0.72); backdrop-filter: blur(12px); }
     /* Everything you can click fades out while the mouse rests, is outside the app or the app is in the background */
     .hideable { transition: opacity 320ms ease, transform 320ms ease; }
@@ -823,11 +888,11 @@
     .overlay.idle .controls { transform: translateY(14px); }
     .controls {
       position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 8px;
-      padding: 64px max(40px, calc((100% - 1180px) / 2)) 24px;
-      background: linear-gradient(transparent, rgba(0, 0, 0, 0.5) 42%, rgba(0, 0, 0, 0.72));
+      padding: 0 max(40px, calc((100% - 1180px) / 2)) 24px;
     }
     .progress-row { display: flex; align-items: center; gap: 14px; }
-    .time { min-width: 44px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: rgba(255,255,255,0.75); }
+    .time { min-width: 44px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: rgba(255,255,255,0.8); text-shadow: 0 1px 10px rgba(0,0,0,0.55); }
+    .transport button:not(.play), .right button { filter: drop-shadow(0 2px 10px rgba(0,0,0,0.35)); }
     .time.total { text-align: right; }
     .buttons-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
     .transport { display: flex; align-items: center; gap: 18px; }
@@ -855,18 +920,35 @@
     .volume { width: 112px; margin: 0 8px 0 2px; }
     .hidden { display: none !important; }
     @media (prefers-reduced-motion: reduce) {
-      .overlay, .item, .backdrop, .hideable { transition: none; animation: none; }
+      .overlay, .item, .backdrop, .backdrop-layer, .hideable, .stage, .art, .art-box, .swap-in, .track, .loading span { transition: none; animation: none; }
+      .track.entering .item { animation: none; }
       .interlude.active .ytmd-interlude-dots { animation: none; }
     }
   `;
   const fsOverlay = element("div", "overlay");
   fsOverlay.setAttribute("role", "dialog");
   fsOverlay.setAttribute("aria-label", "Fullscreen lyrics");
-  const fsBackdrop = element("canvas", "backdrop");
-  const fsBackdropSecond = element("canvas", "backdrop second");
+  const fsBackdrops = element("div", "backdrops");
   const fsHeader = element("header");
   const fsCover = element("img", "cover");
   fsCover.alt = "";
+  fsCover.title = "Show the cover (C)";
+  // The large cover
+  const fsStage = element("div", "stage");
+  const fsArtBox = element("div", "art-box");
+  const fsArtGlow = element("canvas", "art-glow");
+  const fsArt = element("img", "art");
+  fsArt.alt = "";
+  fsArt.title = "Back to the lyrics (C)";
+  fsArtBox.append(fsArtGlow, fsArt);
+  const fsStageText = element("div", "stage-text");
+  const fsStageTitle = element("p", "stage-title");
+  const fsStageArtist = element("p", "stage-artist");
+  const fsStageNote = element("p", "stage-note", "No synced lyrics for this song");
+  fsStageText.append(fsStageTitle, fsStageArtist, fsStageNote);
+  fsStage.append(fsArtBox, fsStageText);
+  const fsLoading = element("div", "loading");
+  fsLoading.append(element("span"), element("span"), element("span"));
   const fsMeta = element("div", "meta");
   const fsTitle = element("p", "title");
   const fsArtist = element("p", "artist");
@@ -879,7 +961,6 @@
   fsViewport.tabIndex = -1;
   const fsTrack = element("div", "track");
   fsViewport.append(fsTrack);
-  const fsEmpty = element("p", "empty hidden", "No synced lyrics for this song");
   const fsResume = iconButton("resume hidden", "sync", "Back to the current line");
   // Player controls at the bottom
   const fsControls = element("div", "controls hideable");
@@ -906,60 +987,103 @@
   fsButtonsRow.append(element("div"), fsTransport, fsRight);
   fsControls.append(fsProgressRow, fsButtonsRow);
 
-  fsOverlay.append(fsBackdrop, fsBackdropSecond, element("div", "shade"), fsHeader, fsViewport, fsEmpty, fsResume, fsControls);
+  fsOverlay.append(fsBackdrops, element("div", "shade"), fsStage, fsHeader, fsViewport, fsLoading, fsResume, fsControls);
   fullscreenRoot.append(fsStyle, fsOverlay);
 
   let fullscreenOpen = false;
   let manualOffset = 0;
   let manualUntil = 0;
   let manualTimer = 0;
-  let backdropUrl = "";
 
-  function largestThumbnail() {
-    const thumbnails = playerApi.getPlayerResponse()?.videoDetails?.thumbnail?.thumbnails;
+  function currentDetails() {
+    return ytmStore.getState().player?.playerResponse?.videoDetails ?? playerApi.getPlayerResponse()?.videoDetails;
+  }
+
+  function largestThumbnail(details) {
+    const thumbnails = details?.thumbnail?.thumbnails;
     if (!Array.isArray(thumbnails) || !thumbnails.length) return "";
-    return [...thumbnails].sort((a, b) => b.width - a.width)[0].url;
+    // Google's album art comes in any size: ask for one sharp enough for the large cover
+    return [...thumbnails].sort((a, b) => b.width - a.width)[0].url.replace(/=w\d+-h\d+/, "=w1200-h1200");
+  }
+
+  function restartAnimation(node) {
+    node.classList.remove("swap-in");
+    void node.offsetWidth;
+    node.classList.add("swap-in");
   }
 
   /** The album art, blurred on a tiny canvas and scaled up: a soft moving background that costs almost nothing */
-  function paintBackdrop(url) {
-    if (url === backdropUrl) return;
-    backdropUrl = url;
-    fsBackdrop.classList.remove("ready");
-    fsBackdropSecond.classList.remove("ready");
-    if (!url) return;
+  function paintBackdrop(image) {
+    const seconds = performance.now() / 1000;
+    const paint = (className, flip, filter, period) => {
+      const canvas = element("canvas", className);
+      canvas.width = 40;
+      canvas.height = 40;
+      const context = canvas.getContext("2d");
+      context.filter = filter;
+      if (flip) {
+        context.translate(40, 0);
+        context.scale(-1, 1);
+      }
+      context.drawImage(image, -6, -6, 52, 52);
+      // The slow rotation carries on where the previous layer was
+      if (period) canvas.style.animationDelay = `-${(seconds % period).toFixed(2)}s`;
+      return canvas;
+    };
+    const layer = element("div", "backdrop-layer");
+    layer.append(paint("backdrop", false, "blur(3px) saturate(1.6) brightness(0.62)", 80), paint("backdrop second", true, "blur(3px) saturate(1.6) brightness(0.62)", 110));
+    fsBackdrops.append(layer);
+    requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add("ready")));
+    setTimeout(() => {
+      while (layer.previousElementSibling) layer.previousElementSibling.remove();
+    }, 1500);
+
+    // The glow behind the large cover, in the cover's own colours
+    const glow = fsArtGlow.getContext("2d");
+    fsArtGlow.width = 40;
+    fsArtGlow.height = 40;
+    glow.filter = "saturate(1.8)";
+    glow.drawImage(image, 0, 0, 40, 40);
+  }
+
+  let headerVideoId;
+  let artUrl = "";
+  function setArt(url, animate) {
+    if (url === artUrl) return;
+    artUrl = url;
+    if (!url) {
+      fsCover.hidden = true;
+      fsArt.removeAttribute("src");
+      return;
+    }
+    // Swap once the new picture is there, so nothing flashes empty in between
     const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.onload = () => {
-      if (backdropUrl !== url) return;
-      const paint = (canvas, flip) => {
-        canvas.width = 40;
-        canvas.height = 40;
-        const context = canvas.getContext("2d");
-        context.filter = "blur(3px) saturate(1.6) brightness(0.62)";
-        context.save();
-        if (flip) {
-          context.translate(40, 0);
-          context.scale(-1, 1);
-        }
-        context.drawImage(image, -6, -6, 52, 52);
-        context.restore();
-        canvas.classList.add("ready");
-      };
-      paint(fsBackdrop, false);
-      paint(fsBackdropSecond, true);
+    image.onload = image.onerror = () => {
+      if (artUrl !== url) return;
+      fsCover.hidden = false;
+      fsCover.src = url;
+      fsArt.src = url;
+      if (animate) {
+        restartAnimation(fsCover);
+        restartAnimation(fsArtBox);
+      }
+      if (image.naturalWidth) paintBackdrop(image);
     };
     image.src = url;
   }
 
   function renderFullscreenHeader() {
-    const details = playerApi.getPlayerResponse()?.videoDetails;
-    fsTitle.textContent = details?.title ?? "";
-    fsArtist.textContent = details?.author ?? "";
-    const art = largestThumbnail();
-    fsCover.src = art;
-    fsCover.hidden = !art;
-    paintBackdrop(art);
+    const details = currentDetails();
+    const videoId = details?.videoId ?? null;
+    const changed = videoId !== headerVideoId;
+    headerVideoId = videoId;
+    fsTitle.textContent = fsStageTitle.textContent = details?.title ?? "";
+    fsArtist.textContent = fsStageArtist.textContent = details?.author ?? "";
+    if (changed) {
+      restartAnimation(fsMeta);
+      restartAnimation(fsStageText);
+    }
+    setArt(largestThumbnail(details), changed);
   }
 
   function renderFullscreenSources(sources) {
@@ -982,18 +1106,71 @@
     fsSources.replaceChildren(...nodes);
   }
 
-  function renderFullscreen() {
+  const SWITCH_OUT_MS = 380;
+  let switchStartedAt = -Infinity;
+  let renderTimer = 0;
+  let switchFallback = 0;
+  let enterTimer = 0;
+
+  function lyricsLoading() {
+    return options.enabled && !!song.videoId && (song.community === undefined || (song.youtube === undefined && !!song.browseId));
+  }
+
+  /** Lets the lyrics on screen drift away; the next render brings the new ones in */
+  function beginSwitch() {
+    switchStartedAt = performance.now();
+    clearTimeout(renderTimer);
+    fsOverlay.classList.add("switching");
+    fsResume.classList.add("hidden");
+    clearTimeout(switchFallback);
+    // Should nothing come at all, stop waiting after a while
+    switchFallback = setTimeout(() => {
+      if (fsOverlay.classList.contains("switching")) renderFullscreen(false, true);
+    }, 9000);
+  }
+
+  function animateLinesIn() {
+    const focusItem = Math.max(0, itemIndexOfLine(Math.max(lastStartedLine(songTimeMs()), 0)) - 2);
+    for (const [index, item] of current.items.entries()) {
+      const node = fullscreenNodeOf(item);
+      if (node) node.style.setProperty("--i", String(Math.min(Math.max(index - focusItem, 0), 12)));
+    }
+    fsTrack.classList.remove("entering");
+    void fsTrack.offsetWidth;
+    fsTrack.classList.add("entering");
+    clearTimeout(enterTimer);
+    enterTimer = setTimeout(() => fsTrack.classList.remove("entering"), 1700);
+  }
+
+  function renderFullscreen(opening, giveUp) {
+    clearTimeout(renderTimer);
+    // The old lyrics get to finish drifting away first
+    const wait = SWITCH_OUT_MS - (performance.now() - switchStartedAt);
+    if (wait > 0) {
+      renderTimer = setTimeout(() => renderFullscreen(opening, giveUp), wait);
+      return;
+    }
     renderFullscreenHeader();
     manualOffset = 0;
     fsTrack.classList.remove("manual");
     fsResume.classList.add("hidden");
-    if (!current) {
+    if (!current && lyricsLoading() && !giveUp) {
+      // Still looking: the three dots show until the lyrics are there
+      if (!fsOverlay.classList.contains("switching")) beginSwitch();
       fsTrack.replaceChildren();
-      fsEmpty.classList.remove("hidden");
       renderFullscreenSources([]);
       return;
     }
-    fsEmpty.classList.add("hidden");
+    const animateIn = opening === true || fsOverlay.classList.contains("switching");
+    clearTimeout(switchFallback);
+    fsOverlay.classList.remove("switching");
+    fsOverlay.classList.toggle("no-lyrics", !current);
+    if (!current) {
+      fsStageNote.textContent = options.enabled ? "No synced lyrics for this song" : "Synced lyrics are turned off in Settings";
+      fsTrack.replaceChildren();
+      renderFullscreenSources([]);
+      return;
+    }
     dropFullscreenNodes();
     const nodes = current.items.map(item => {
       const node =
@@ -1009,8 +1186,42 @@
     renderFullscreenSources(availableSources());
     // The new elements start out plain; the next tick marks the lines being sung again
     resetActive();
-    requestAnimationFrame(() => tick(true));
+    tick(true);
+    if (animateIn) animateLinesIn();
   }
+
+  // ── Large cover ──
+  const COVER_VIEW_KEY = "ytmd-lyrics-cover-view";
+  let coverView = false;
+  try {
+    coverView = localStorage.getItem(COVER_VIEW_KEY) === "1";
+  } catch {
+    // Storage blocked: starts with the lyrics every time
+  }
+  let relayoutTimer = 0;
+
+  function setCoverView(on) {
+    if (on === coverView) return;
+    coverView = on;
+    try {
+      localStorage.setItem(COVER_VIEW_KEY, on ? "1" : "0");
+    } catch {
+      // Only remembered until the app closes
+    }
+    if (!fullscreenOpen) return;
+    // The lyrics fade out, move to their new place and come back in
+    fsTrack.classList.add("relayout");
+    clearTimeout(relayoutTimer);
+    relayoutTimer = setTimeout(() => {
+      fsOverlay.classList.toggle("cover-view", coverView);
+      layoutFullscreen(true);
+      fsTrack.classList.remove("relayout");
+      if (current) animateLinesIn();
+    }, 190);
+  }
+
+  fsCover.onclick = () => setCoverView(!coverView);
+  fsArt.onclick = () => setCoverView(!coverView);
 
   function fullscreenNodeOf(item) {
     return nodesOf(item).find(node => fsTrack.contains(node)) ?? null;
@@ -1125,6 +1336,7 @@
   function updatePlayState() {
     const paused = getVideo()?.paused ?? true;
     setIcon(fsPlay, paused ? "play_arrow" : "pause", paused ? "Play (Space)" : "Pause (Space)");
+    fsOverlay.classList.toggle("paused", paused);
   }
 
   function currentVolume() {
@@ -1310,6 +1522,10 @@
         toggleMute();
         showControls();
         break;
+      case "c":
+      case "C":
+        setCoverView(!coverView);
+        break;
       case "Tab":
         showControls();
         return;
@@ -1327,7 +1543,10 @@
     if (fullscreenOpen) return;
     fullscreenOpen = true;
     if (!fullscreenHost.isConnected) document.body.appendChild(fullscreenHost);
-    renderFullscreen();
+    fsOverlay.classList.toggle("cover-view", coverView);
+    fsOverlay.classList.remove("switching", "no-lyrics");
+    switchStartedAt = -Infinity;
+    renderFullscreen(true);
     resizeObserver.observe(fsViewport);
     window.addEventListener("keydown", onFullscreenKeydown, true);
     requestAnimationFrame(() => fsOverlay.classList.add("visible"));
@@ -1347,6 +1566,8 @@
     fullscreenOpen = false;
     fsOverlay.classList.remove("visible");
     clearInterval(progressTimer);
+    clearTimeout(renderTimer);
+    clearTimeout(switchFallback);
     clearTimeout(idleTimer);
     if (document.fullscreenElement === fullscreenHost) void document.exitFullscreen().catch(() => {});
     resizeObserver.disconnect();
@@ -1397,7 +1618,11 @@
     enableAutoScroll();
     restoreYtmLyrics();
     renderTab();
-    if (fullscreenOpen) renderFullscreen();
+    if (fullscreenOpen) {
+      beginSwitch();
+      renderFullscreenHeader();
+      renderFullscreenSources([]);
+    }
   }
 
   function requestCommunity(details) {
@@ -1436,7 +1661,6 @@
     const playingVideoId = details?.videoId ?? null;
     if (playingVideoId !== song.videoId) {
       startSong(playingVideoId, details);
-      if (fullscreenOpen) renderFullscreenHeader();
     }
     if (!playingVideoId || !options.enabled) return;
 
