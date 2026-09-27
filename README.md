@@ -7,7 +7,7 @@
 **A desktop client for YouTube Music.**
 Mini player, equalizer, word-by-word synced lyrics, a theme that follows your music, listening stats and a command palette.
 
-![Version](https://img.shields.io/badge/Version-2.1.4-e8314c?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-2.1.5-e8314c?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/Windows-x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-44-47848F?style=for-the-badge&logo=electron&logoColor=white)
 ![License](https://img.shields.io/badge/License-GPL--3.0-brightgreen?style=for-the-badge)

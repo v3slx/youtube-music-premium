@@ -1,6 +1,10 @@
-# YouTube Music Premium 2.1.4
+# YouTube Music Premium 2.1.5
 
 Lyrics, redone: word by word, right on time and a lot nicer to watch.
+
+## Fixed in 2.1.5
+
+- After a few songs in a row the lyrics could jump to the end and fullscreen lyrics showed a position far past the end of the song (for example 12:50 of 3:22). They now always follow the song itself
 
 ## Lyrics
 

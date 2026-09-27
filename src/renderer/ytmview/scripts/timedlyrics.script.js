@@ -93,8 +93,9 @@
   }
 
   // ── The clock ────────────────────────────────────────────────────────────────────────────────────────
-  // The player's progress event only comes about four times a second. The <video> element knows the exact
-  // position at any moment, so the lyrics read it on every frame instead.
+  // The player's progress event only comes about four times a second, so the lyrics ask the player for the
+  // exact position on every frame instead. Not the <video> element: with gapless playback YouTube Music keeps
+  // one element running across songs, and its currentTime can be minutes ahead of the song.
   let video = null;
   function getVideo() {
     if (!video || !video.isConnected) {
@@ -111,10 +112,13 @@
     return !!document.querySelector("#movie_player.ad-showing");
   }
 
+  function songPosition() {
+    const seconds = typeof playerApi.getCurrentTime === "function" ? playerApi.getCurrentTime() : NaN;
+    return Number.isFinite(seconds) ? seconds : (getVideo()?.currentTime ?? 0);
+  }
+
   function songTimeMs() {
-    const current = getVideo();
-    const seconds = current ? current.currentTime : typeof playerApi.getCurrentTime === "function" ? playerApi.getCurrentTime() : 0;
-    return seconds * 1000 + options.offsetMs;
+    return songPosition() * 1000 + options.offsetMs;
   }
 
   function isPlaying() {
@@ -1306,7 +1310,7 @@
 
   function songDuration() {
     const duration = typeof playerApi.getDuration === "function" ? playerApi.getDuration() : 0;
-    return duration || getVideo()?.duration || 0;
+    return duration || 0;
   }
 
   function setFill(input, fraction) {
@@ -1325,7 +1329,7 @@
     if (!force && (now - lastProgressUpdate < 200 || fsOverlay.classList.contains("idle"))) return;
     lastProgressUpdate = now;
     const duration = songDuration();
-    const position = getVideo()?.currentTime ?? 0;
+    const position = songPosition();
     fsCurrentTime.textContent = formatTime(position);
     fsTotalTime.textContent = formatTime(duration);
     const fraction = duration ? position / duration : 0;
@@ -1383,7 +1387,7 @@
   }
 
   function seekBy(seconds) {
-    const position = getVideo()?.currentTime ?? 0;
+    const position = songPosition();
     playerApi.seekTo(Math.max(0, Math.min(songDuration() || Infinity, position + seconds)));
   }
 
